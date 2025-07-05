@@ -38,8 +38,8 @@ export const NetworkSelector: FC = () => {
     {
       name: 'Devnet',
       value: 'devnet' as Network,
-      endpoint: '',
-      status: 'offline',
+      endpoint: 'api.platform.hiro.so',
+      status: 'online',
     },
   ];
 

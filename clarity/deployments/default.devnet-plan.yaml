@@ -38,4 +38,11 @@ plan:
             path: contracts/nft-marketplace.clar
             anchor-block-only: true
             clarity-version: 1
+        - contract-publish:
+            contract-name: healthchain
+            expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            cost: 50000
+            path: contracts/healthchain.clar
+            anchor-block-only: true
+            clarity-version: 3
       epoch: "2.0"

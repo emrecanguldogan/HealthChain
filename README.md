@@ -1,122 +1,155 @@
-![NFT Marketplace on Stacks](./marketplace-screenshot.png)
+# HealthChain - Decentralized Health Records
 
-This is a full-stack demo of an NFT marketplace built on the Stacks blockchain, allowing users to mint, list, and purchase NFTs using STX tokens. This project demonstrates how to build decentralized Stacks applications using Clarity smart contracts and Next.js with the Hiro Platform.
+A decentralized health record system built on the Stacks blockchain that allows patients to securely store and share their health data with authorized doctors.
 
-By following this guide, you can have a working NFT marketplace live on the Stacks blockchain in less than 5 minutes!
+## 🏥 Project Overview
 
-(This example app is intended for educational purposes only. The provided smart contracts have not been audited.)
+HealthChain is a decentralized application (dApp) that transforms the traditional NFT marketplace template into a secure health record management system. Patients can upload encrypted health data to the blockchain and grant access to specific doctors, ensuring data privacy and control.
 
-## Features
+## 🚀 Core Features
 
-- Mint NFTs to user wallets
-- List NFTs for sale
-- Secure ownership tracking and transfers
-- Pre-configured STX wallet plugin for Devnet testing
+### Smart Contract Functions
+- **`add-record(data: (buff 1024))`** - Patients can upload encrypted health data
+- **`grant-access(doctor: principal)`** - Patients can grant read access to specific doctors
+- **`get-record(patient: principal)`** - Doctors can view patient records only if authorized
 
-## Getting Started
+### Frontend Components
+- **RecordUploadForm** - Interface for patients to upload health data
+- **GrantAccessForm** - Interface for patients to grant doctor access
+- **ViewRecord** - Interface for doctors to view authorized patient records
+
+## 🛠️ Technology Stack
+
+- **Blockchain**: Stacks (Clarity smart contracts)
+- **Frontend**: Next.js with React
+- **Wallet Integration**: Hiro Wallet, Xverse
+- **Styling**: Tailwind CSS
+- **Development**: Clarinet for contract development
+
+## 📋 Contract Address
+
+**Testnet Contract Address**: `ST2CEP848SACBBX7KHVC4TBZXBV0JH6SC0WF439NF.healthchain`
+
+## 🏗️ Project Structure
+
+```
+HealthChain/
+├── clarity/
+│   ├── contracts/
+│   │   └── healthchain.clar          # Main smart contract
+│   ├── deployments/
+│   │   └── default.devnet-plan.yaml  # Deployment configuration
+│   └── Clarinet.toml                 # Clarinet configuration
+├── front-end/
+│   ├── src/
+│   │   ├── components/
+│   │   │   └── healthchain/          # HealthChain UI components
+│   │   ├── constants/
+│   │   │   └── contracts.ts          # Contract configuration
+│   │   └── app/
+│   │       ├── page.tsx              # Main application page
+│   │       └── globals.css           # Global styles
+│   └── package.json
+└── README.md
+```
+
+## 🚀 Getting Started
 
 ### Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn
+- Clarinet CLI (for contract development)
 
-- [Hiro Platform](https://platform.hiro.so) account
-- Node.js 18+ and npm/yarn/pnpm
-- _(Recommended)_ [Clarinet](https://github.com/hirosystems/clarinet) and the [Clarity VSCode Extension](https://marketplace.visualstudio.com/items?itemName=HiroSystems.clarity-lsp)
+### Installation
 
-### Setup Development Environment
-
-1. **Start Devnet in Hiro Platform**
-
-   - Log into the [Hiro Platform](https://platform.hiro.so)
-   - Navigate to your project and start Devnet
-   - Copy your API key from either:
-     - The Devnet Stacks API URL: `https://api.platform.hiro.so/v1/ext/<YOUR-API-KEY>/stacks-blockchain-api`
-     - Or from https://platform.hiro.so/settings/api-keys
-
-2. **Configure Local Environment**
-
-   Git clone the project code to your local machine via HTTPS or SSH and navigate to the project root in your terminal.
-
+1. **Clone the repository**
    ```bash
-   # Install Clarity project dependencies
-   cd clarity
-   npm install
+   git clone <repository-url>
+   cd HealthChain
+   ```
 
-   # Configure frontend environment
+2. **Install frontend dependencies**
+   ```bash
+   cd front-end
+   npm install
+   ```
+
+3. **Deploy the smart contract**
+   ```bash
+   cd ../clarity
+   clarinet contracts deploy healthchain
+   ```
+
+4. **Start the development server**
+   ```bash
    cd ../front-end
-   npm install
-   cp .env.example .env
-   ```
-
-   Add your Hiro Platform API key to the renamed `.env` file:
-
-   ```
-   NEXT_PUBLIC_PLATFORM_HIRO_API_KEY=your-api-key-here
-   ```
-
-3. **Start the Frontend Application**
-
-   Start the Next.js application from the front-end directory.
-
-   ```bash
    npm run dev
    ```
 
-   Visit [http://localhost:3000](http://localhost:3000) to view and interact with the marketplace. If Devnet is running, your test wallets will already be funded and connected for testing.
+## 💡 How It Works
 
-## Testing with Devnet
+### For Patients
+1. **Connect Wallet**: Use Hiro Wallet or Xverse to connect to the application
+2. **Upload Health Data**: Use the RecordUploadForm to upload encrypted health data
+3. **Grant Access**: Use the GrantAccessForm to give specific doctors access to your records
 
-The Hiro Platform's Devnet is a sandboxed, personal blockchain environment for testing your dApps before deploying them to the testnet or mainnet. Each time you start a new Devnet, it will reset the blockchain state and deploy your project contracts from scratch.
+### For Doctors
+1. **Connect Wallet**: Use your Stacks wallet to connect to the application
+2. **View Records**: Use the ViewRecord component to access patient records you've been authorized to view
 
-This is useful because deployments to the blockchain are permanent and cannot be undone. Ensure you have tested your contracts thoroughly in the Devnet before promoting them to the testnet or mainnet!
+### Security Features
+- **Encrypted Data**: Health data is stored as encrypted buffers on the blockchain
+- **Access Control**: Only patients and explicitly authorized doctors can view records
+- **Blockchain Security**: Leverages Stacks blockchain for immutability and transparency
 
-### 1. Start Devnet and Deploy Contracts
+## 🎨 Design
 
-1. Open your project in the Hiro Platform
-2. Click "Start Devnet" to initialize your testing environment (the contracts will be automatically deployed per your deployment plan)
-3. You should see your contracts deployed and the initial NFT mints occur no later than block 45 in the Devnet dashboard
+- **Primary Color**: Emerald Green (#10B981)
+- **Secondary Color**: Dark Slate (#1F2937)
+- **Theme**: Medical/Healthcare with modern UI/UX
+- **Hero Text**: "Own your health data. Share it with trusted doctors."
 
-### 2. Testing Smart Contract Functions
+## 🔧 Development
 
-Smart contract functions can be tested directly from your Platform dashboard.
+### Smart Contract Development
+The smart contract is written in Clarity and includes:
+- Data storage using maps
+- Access control mechanisms
+- Public and read-only functions
 
-1. Select the Devnet tab to confirm that your contracts are deployed and Devnet is running
-2. Click "Interact with Devnet" and then "Call functions"
-3. Select your contract and the function you want to test from the dropdown menus
-4. Use one of the pre-funded devnet wallets as the caller and another as the recipient (if needed)
-5. Click "Call function" to execute the function, which will either succeed or fail based on the function's logic and the caller's permissions
-6. Once the function has been submitted, you can watch for the transaction to resolve on-chain in the Devnet dashboard and confirm that the function executed as expected
+### Frontend Development
+The frontend uses:
+- Next.js 13+ with App Router
+- React hooks for state management
+- Micro-stacks for Stacks integration
+- Tailwind CSS for styling
 
-Remember that any changes to the contracts will require restarting Devnet and redeploying the contracts!
+## 📝 Additional Features Implemented
 
-### 3. NFT Marketplace Integration Testing
+- **Responsive Design**: Works on desktop and mobile devices
+- **Error Handling**: Comprehensive error messages for user feedback
+- **Network Support**: Supports devnet, testnet, and mainnet
+- **Wallet Integration**: Seamless integration with Stacks wallets
 
-With Devnet running, you can test your front-end functionality and validate that it's working in the same way you just tested the NFT contract functions.
+## 🔒 Privacy & Security
 
-1. Confirm that your Devnet is running in the Platform dashboard and `npm run dev` is running in the front-end directory
-2. Navigate to [http://localhost:3000](http://localhost:3000) to view and interact with the marketplace
-3. View your NFTs in the marketplace and test the minting, listing, and purchasing functionality using the pre-funded wallets.
-4. Navigate to the Devnet dashboard in the Platform to view the transactions as they are submitted and resolved on-chain.
+- Health data is encrypted before being stored on the blockchain
+- Access is controlled through explicit authorization
+- Patients maintain full control over their data
+- No central authority can access patient records
 
-You do not need to restart Devnet to test changes to your front-end.
+## 🚀 Deployment
 
-## Next Steps
+The application is designed to be deployed to Stacks testnet and mainnet. The contract address will be updated once deployed to the respective networks.
 
-Once you've thoroughly tested your dApp in Devnet and are confident in its functionality, you can proceed to testing on the Stacks Testnet before launching on Mainnet.
+## 📄 License
 
-### Moving to Testnet
+This project is licensed under the MIT License.
 
-1. Use the [Stacks Testnet Faucet](https://explorer.hiro.so/sandbox/faucet?chain=testnet) to get test STX tokens
-2. Deploy your contracts to the Testnet using the Platform dashboard and your same deployment plan
-3. Test your application with real network conditions and transaction times
-4. Verify your contract interactions in the [Testnet Explorer](https://explorer.hiro.so/?chain=testnet)
+## 🤝 Contributing
 
-### Launching on Mainnet
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-When you're ready to launch your NFT marketplace officially:
+## 📞 Support
 
-1. Ensure you have real STX tokens for deployment and transaction costs
-2. Update your deployment configuration to target Mainnet
-3. Deploy your contracts through the Platform dashboard
-4. Update your frontend environment variables to point to Mainnet
-5. Launch your application and begin processing real transactions!
-
-Remember: Mainnet deployments are permanent and involve real cryptocurrency transactions. Double-check all contract code and frontend integrations before deploying to Mainnet.
+For support or questions, please open an issue in the repository.

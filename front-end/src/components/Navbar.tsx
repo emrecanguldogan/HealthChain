@@ -51,14 +51,20 @@ export const Navbar = () => {
               /-/
             </Flex>
             <Link href="/" textDecoration="none">
-              <Box fontSize="lg" fontWeight="bold" color="gray.900" ml={4}>
-                NFT Marketplace
+              <Box fontSize="lg" fontWeight="bold" color="emerald.600" ml={4}>
+                HealthChain
               </Box>
             </Link>
           </Flex>
           <Flex align="center" gap={4}>
-            <Link href="/my-nfts">
-              <Box>My NFTs</Box>
+            <Link href="/profile">
+              <Box>Profil Oluştur</Box>
+            </Link>
+            <Link href="/my-profile">
+              <Box>Benim Profilim</Box>
+            </Link>
+            <Link href="/encryption">
+              <Box>Şifreleme</Box>
             </Link>
             <NetworkSelector />
             {isDevnetEnvironment() ? (
