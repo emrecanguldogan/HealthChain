@@ -1,499 +1,482 @@
-import { openContractCall } from '@/lib/contract-utils';
-import { getHealthchainContract } from '@/constants/contracts';
+import { openDB, DBSchema } from 'idb';
 import { Network } from '@/lib/network';
-import { ClarityValue, someCV, noneCV, stringAsciiCV, stringUtf8CV, uintCV, boolCV, listCV, principalCV } from '@stacks/transactions';
-import { STACKS_TESTNET } from '@stacks/network';
-import { fetchCallReadOnlyFunction } from '@stacks/transactions';
-import { getApi } from '@/lib/stacks-api';
-import { isDevnetEnvironment } from '@/lib/use-network';
+import { callReadOnlyFunction, callPublicFunction } from '@/lib/contract-utils';
 
-export interface DoctorAuthorization {
-  doctorAddress: string;
-  permissions: string[];
+// Contract name for v2
+const CONTRACT_NAME = 'healthchain-v2';
+
+// Database schema
+interface HealthChainDB extends DBSchema {
+  patients: {
+    key: string; // wallet hash
+    value: {
+      walletHash: string;
+      name: string;
+      age: number;
+      bloodType: string;
+      allergies: string;
+      medicalHistory: string;
+      emergencyContact: string;
+      role: 'patient';
+      createdAt: Date;
+    };
+  };
+  doctors: {
+    key: string; // wallet hash
+    value: {
+      walletHash: string;
+      name: string;
+      specialization: string;
+      licenseNumber: string;
+      experience: number;
+      role: 'doctor';
+      createdAt: Date;
+    };
+  };
+  healthRecords: {
+    key: string; // `${patientHash}_${recordId}`
+    value: {
+      id: string;
+      patientHash: string;
+      recordType: string;
+      description: string;
+      data: string;
+      createdBy: string;
+      createdAt: Date;
+    };
+    indexes: {
+      'by-patient': string;
+    };
+  };
+  doctorAuthorizations: {
+    key: string; // `${patientHash}_${doctorHash}`
+    value: {
+      id: string;
+      patientHash: string;
+      doctorHash: string;
+      authorized: boolean;
+      permissions: string[];
+      createdAt: Date;
+    };
+    indexes: {
+      'by-patient': string;
+      'by-doctor': string;
+    };
+  };
 }
 
-export interface AccessToken {
-  tokenId: number;
-  owner: string;
-  isActive: boolean;
-}
+// Initialize database
+const initDB = async () => {
+  return openDB<HealthChainDB>('healthchain-db', 1, {
+    upgrade(db) {
+      // Patients table
+      if (!db.objectStoreNames.contains('patients')) {
+        db.createObjectStore('patients', { keyPath: 'walletHash' });
+      }
+      
+      // Doctors table
+      if (!db.objectStoreNames.contains('doctors')) {
+        db.createObjectStore('doctors', { keyPath: 'walletHash' });
+      }
+      
+      // Health records table
+      if (!db.objectStoreNames.contains('healthRecords')) {
+        const recordsStore = db.createObjectStore('healthRecords', { keyPath: 'id' });
+        recordsStore.createIndex('by-patient', 'patientHash', { unique: false });
+      }
+      
+      // Doctor authorizations table
+      if (!db.objectStoreNames.contains('doctorAuthorizations')) {
+        const authStore = db.createObjectStore('doctorAuthorizations', { keyPath: 'id' });
+        authStore.createIndex('by-patient', 'patientHash', { unique: false });
+        authStore.createIndex('by-doctor', 'doctorHash', { unique: false });
+      }
+    },
+  });
+};
 
-// Mint access token (NFT) for user - API üzerinden otomatik
-export const mintAccessToken = async (network: Network, userAddress?: string) => {
-  const contract = getHealthchainContract(network);
+// Hash wallet address using SHA-256
+const hashWalletAddress = async (address: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(address);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+// Database operations
+export const savePatientProfile = async (walletAddress: string, profileData: any) => {
+  const db = await initDB();
+  const walletHash = await hashWalletAddress(walletAddress);
   
+  await db.put('patients', {
+    walletHash,
+    ...profileData,
+    role: 'patient',
+    createdAt: new Date()
+  });
+  
+  return walletHash;
+};
+
+export const saveDoctorProfile = async (walletAddress: string, profileData: any) => {
+  const db = await initDB();
+  const walletHash = await hashWalletAddress(walletAddress);
+  
+  await db.put('doctors', {
+    walletHash,
+    ...profileData,
+    role: 'doctor',
+    createdAt: new Date()
+  });
+  
+  return walletHash;
+};
+
+export const getPatientProfileByWallet = async (walletAddress: string) => {
+  const db = await initDB();
+  const walletHash = await hashWalletAddress(walletAddress);
+  return await db.get('patients', walletHash);
+};
+
+export const getDoctorProfileByWallet = async (walletAddress: string) => {
+  const db = await initDB();
+  const walletHash = await hashWalletAddress(walletAddress);
+  return await db.get('doctors', walletHash);
+};
+
+export const checkUserHasPatientProfile = async (walletAddress: string) => {
+  const db = await initDB();
+  const walletHash = await hashWalletAddress(walletAddress);
+  const profile = await db.get('patients', walletHash);
+  return !!profile;
+};
+
+export const checkUserHasDoctorProfile = async (walletAddress: string) => {
+  const db = await initDB();
+  const walletHash = await hashWalletAddress(walletAddress);
+  const profile = await db.get('doctors', walletHash);
+  return !!profile;
+};
+
+export const saveHealthRecord = async (patientAddress: string, recordData: any) => {
+  const db = await initDB();
+  const patientHash = await hashWalletAddress(patientAddress);
+  const recordId = `${patientHash}_${Date.now()}`;
+  
+  await db.put('healthRecords', {
+    id: recordId,
+    patientHash,
+    ...recordData,
+    createdAt: new Date()
+  });
+  
+  return recordId;
+};
+
+export const getPatientRecordsFromDatabase = async (patientAddress: string) => {
+  const db = await initDB();
+  const patientHash = await hashWalletAddress(patientAddress);
+  return await db.getAllFromIndex('healthRecords', 'by-patient', patientHash);
+};
+
+export const saveDoctorAuthorization = async (patientAddress: string, doctorAddress: string, permissions: string[]) => {
+  const db = await initDB();
+  const patientHash = await hashWalletAddress(patientAddress);
+  const doctorHash = await hashWalletAddress(doctorAddress);
+  const authId = `${patientHash}_${doctorHash}`;
+  
+  await db.put('doctorAuthorizations', {
+    id: authId,
+    patientHash,
+    doctorHash,
+    authorized: true,
+    permissions,
+    createdAt: new Date()
+  });
+};
+
+export const checkDoctorAuthorizationInDatabase = async (patientAddress: string, doctorAddress: string) => {
+  const db = await initDB();
+  const patientHash = await hashWalletAddress(patientAddress);
+  const doctorHash = await hashWalletAddress(doctorAddress);
+  const authId = `${patientHash}_${doctorHash}`;
+  
+  const auth = await db.get('doctorAuthorizations', authId);
+  return auth?.authorized || false;
+};
+
+// Real blockchain operations - No simulation
+
+export const mintAccessToken = async (network: Network, userAddress: string) => {
   try {
-    if (isDevnetEnvironment()) {
-      // Devnet için Hiro Platform API ile gerçek blockchain işlemi
-      console.log('Devnet: Hiro Platform API ile NFT oluşturma işlemi başlatılıyor');
-      
-      const apiKey = process.env.NEXT_PUBLIC_PLATFORM_HIRO_API_KEY;
-      if (!apiKey) {
-        throw new Error('Hiro Platform API key gerekli. Lütfen .env.local dosyasını güncelleyin.');
-      }
-      
-      // Endpoint'i ortam değişkenine göre ayarla
-      const endpoint = process.env.NEXT_PUBLIC_DEVNET_HOST === 'platform'
-        ? 'https://platform.devnet.stacks.co/v2/contracts/call'
-        : 'http://localhost:3999/v2/contracts/call';
-      
-      // Hiro Platform API ile contract call
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey
-        },
-        body: JSON.stringify({
-          contract_id: `${contract.contractAddress}.${contract.contractName}`,
-          function_name: 'mint-access-token',
-          function_args: [],
-          network: 'devnet'
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Hiro API Error: ${response.status} - ${errorData}\nEndpoint: ${endpoint}\nContract: ${contract.contractAddress}.${contract.contractName}`);
-      }
-      
-      const result = await response.json();
-      console.log('Devnet transaction response:', result);
-      
-      // Local storage'a gerçek transaction bilgisini kaydet
-      if (typeof window !== 'undefined') {
-        const tokenData = {
-          tokenId: result.txid ? parseInt(result.txid.slice(-3)) : Math.floor(Math.random() * 1000) + 1,
-          owner: userAddress || 'devnet-user',
-          timestamp: new Date().toISOString(),
-          txid: result.txid,
-          simulated: false
-        };
-        // Wallet-specific storage key kullan
-        const tokenKey = `devnet_access_token_${userAddress || 'devnet-user'}`;
-        localStorage.setItem(tokenKey, JSON.stringify(tokenData));
-      }
-      
-      return result.txid || 'devnet-tx-' + Date.now();
-    } else {
-      // Testnet/Mainnet için Hiro Wallet bağlantısı
-      await openContractCall({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'mint-access-token',
-        functionArgs: [],
-        network,
-      });
+    console.log('🔗 Minting real NFT token on blockchain...');
+    console.log('📍 Network:', network);
+    console.log('📍 User Address:', userAddress);
+    
+    // Check if user already has a token first
+    const hasToken = await checkHasAccessToken(network, userAddress);
+    if (hasToken) {
+      console.log('⚠️ User already has an access token');
+      throw new Error('User already has an access token');
     }
-    return true;
+    
+    console.log('🚀 Sending mint transaction...');
+    const result = await callPublicFunction(
+      network,
+      'mint-access-token',
+      [userAddress, userAddress, 1000], // patient, doctor, expires-at
+      userAddress
+    );
+    
+    console.log('📤 Transaction sent successfully:', result);
+    console.log('⏳ Transaction is now in mempool, waiting for confirmation...');
+    
+    // Return transaction result immediately - don't wait for confirmation
+    // The frontend should poll for token status separately
+    return {
+      success: true,
+      transactionId: result.txid,
+      message: 'Transaction sent to mempool successfully'
+    };
   } catch (error) {
-    console.error('Error minting access token:', error);
+    console.error('❌ NFT token minting failed:', error);
     throw error;
   }
 };
 
-// Authorize doctor to access patient data - API üzerinden otomatik
-export const authorizeDoctor = async (doctorAddress: string, permissions: string[] = ['read'], network: Network) => {
-  const contract = getHealthchainContract(network);
-  
-  const permissionCVs = permissions.map(p => stringAsciiCV(p));
-  const functionArgs: ClarityValue[] = [
-    principalCV(doctorAddress),
-    listCV(permissionCVs)
-  ];
-
+export const checkHasAccessToken = async (network: Network, userAddress: string) => {
   try {
-    if (isDevnetEnvironment()) {
-      // Devnet için Hiro Platform API ile gerçek blockchain işlemi
-      console.log('Devnet: Hiro Platform API ile doktor yetkilendirme işlemi başlatılıyor');
-      
-      const apiKey = process.env.NEXT_PUBLIC_PLATFORM_HIRO_API_KEY;
-      if (!apiKey) {
-        throw new Error('Hiro Platform API key gerekli. Lütfen .env.local dosyasını güncelleyin.');
-      }
-      
-      // Hiro Platform API ile contract call
-      const response = await fetch('https://api.hiro.so/v2/contracts/call', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey
-        },
-        body: JSON.stringify({
-          contract_id: `${contract.contractAddress}.${contract.contractName}`,
-          function_name: 'authorize-doctor',
-          function_args: functionArgs.map(arg => arg.toString()),
-          network: 'devnet'
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Hiro API Error: ${response.status} - ${errorData}`);
-      }
-      
-      const result = await response.json();
-      console.log('Devnet authorization response:', result);
-      
-      // Local storage'a gerçek authorization bilgisini kaydet
-      if (typeof window !== 'undefined') {
-        const authData = {
-          doctorAddress,
-          permissions,
-          timestamp: new Date().toISOString(),
-          txid: result.txid,
-          simulated: false
-        };
-        localStorage.setItem('devnet_doctor_auth', JSON.stringify(authData));
-      }
-      
-      return result.txid || 'devnet-auth-' + Date.now();
-    } else {
-      // Testnet/Mainnet için Hiro Wallet bağlantısı
-      await openContractCall({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'authorize-doctor',
-        functionArgs,
-        network,
-      });
-    }
-    return true;
+    console.log('🔍 Checking NFT token ownership on blockchain...');
+    
+    const result = await callReadOnlyFunction(
+      network,
+      'has-access-token',
+      [userAddress, userAddress], // patient, doctor
+      userAddress
+    );
+    
+    console.log('📊 NFT ownership check result:', result);
+    return result;
   } catch (error) {
-    console.error('Error authorizing doctor:', error);
-    throw error;
-  }
-};
-
-// Revoke doctor authorization - API üzerinden otomatik
-export const revokeDoctor = async (doctorAddress: string, network: Network) => {
-  const contract = getHealthchainContract(network);
-  
-  const functionArgs: ClarityValue[] = [principalCV(doctorAddress)];
-
-  try {
-    if (isDevnetEnvironment()) {
-      // Devnet için otomatik işlem
-      console.log('Devnet: Doktor yetkisi iptal işlemi başlatıldı');
-      return 'devnet-revoke-' + Date.now();
-    } else {
-      // Testnet/Mainnet için Hiro Wallet bağlantısı
-      await openContractCall({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'revoke-doctor',
-        functionArgs,
-        network,
-      });
-    }
-    return true;
-  } catch (error) {
-    console.error('Error revoking doctor:', error);
-    throw error;
-  }
-};
-
-// Transfer access token (NFT) to another user - API üzerinden otomatik
-export const transferAccessToken = async (newOwnerAddress: string, network: Network) => {
-  const contract = getHealthchainContract(network);
-  
-  const functionArgs: ClarityValue[] = [principalCV(newOwnerAddress)];
-
-  try {
-    if (isDevnetEnvironment()) {
-      // Devnet için otomatik işlem
-      console.log('Devnet: Token transfer işlemi başlatıldı');
-      return 'devnet-transfer-' + Date.now();
-    } else {
-      // Testnet/Mainnet için Hiro Wallet bağlantısı
-      await openContractCall({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'transfer-token',
-        functionArgs,
-        network,
-      });
-    }
-    return true;
-  } catch (error) {
-    console.error('Error transferring token:', error);
-    throw error;
-  }
-};
-
-// Read-only functions for checking access and permissions
-
-// Check if user has access token (blockchain read-only)
-export const checkHasAccessToken = async (userAddress: string, network: Network): Promise<boolean> => {
-  const contract = getHealthchainContract(network);
-  try {
-    if (isDevnetEnvironment()) {
-      // Devnet için wallet-specific token kontrolü
-      if (typeof window !== 'undefined') {
-        const tokenKey = `devnet_access_token_${userAddress}`;
-        const tokenData = localStorage.getItem(tokenKey);
-        if (tokenData) {
-          const parsed = JSON.parse(tokenData);
-          return parsed.simulated === false; // Gerçek blockchain işlemi kontrolü
-        }
-      }
-      return false;
-    } else {
-      // Testnet/Mainnet için normal kontrol
-      const result = await fetchCallReadOnlyFunction({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'has-access-token',
-        functionArgs: [principalCV(userAddress)],
-        network: STACKS_TESTNET,
-        senderAddress: userAddress,
-      });
-      
-      if (typeof result === 'string') {
-        return result === 'true';
-      }
-      return false;
-    }
-  } catch (error) {
-    console.error('Error checking access token:', error);
+    console.error('❌ NFT ownership check failed:', error);
     return false;
   }
 };
 
-// Get user's access token ID (blockchain read-only)
-export const getAccessTokenId = async (userAddress: string, network: Network): Promise<number | null> => {
-  const contract = getHealthchainContract(network);
+export const getTokenId = async (network: Network, userAddress: string) => {
   try {
-    if (isDevnetEnvironment()) {
-      // Devnet için simülasyon kontrolü
-      if (typeof window !== 'undefined') {
-        const tokenData = localStorage.getItem('devnet_access_token');
-        if (tokenData) {
-          const parsed = JSON.parse(tokenData);
-          return parsed.tokenId || 1;
-        }
-      }
-      return null;
-    } else {
-      // Testnet/Mainnet için normal kontrol
-      const result = await fetchCallReadOnlyFunction({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'get-token-id',
-        functionArgs: [principalCV(userAddress)],
-        network: STACKS_TESTNET,
-        senderAddress: userAddress,
-      });
-      
-      if (typeof result === 'string') {
-        const parsed = parseInt(result, 10);
-        return isNaN(parsed) ? null : parsed;
-      }
-      return null;
-    }
+    console.log('🔍 Getting NFT token ID from blockchain...');
+    
+    const result = await callReadOnlyFunction(
+      network,
+      'get-access-token-id',
+      [userAddress, userAddress], // patient, doctor
+      userAddress
+    );
+    
+    console.log('📊 Token ID result:', result);
+    return result;
   } catch (error) {
-    console.error('Error getting access token ID:', error);
+    console.error('❌ Token ID retrieval failed:', error);
     return null;
   }
 };
 
-// Check if doctor is authorized for patient
-export const checkDoctorAuthorization = async (patientAddress: string, doctorAddress: string, network: Network): Promise<boolean> => {
+export const authorizeDoctor = async (network: Network, doctorAddress: string, permissions: string[], userAddress: string) => {
   try {
-    if (isDevnetEnvironment()) {
-      // Devnet için local storage kontrolü
-      if (typeof window !== 'undefined') {
-        const authData = localStorage.getItem('devnet_doctor_auth');
-        if (authData) {
-          const parsed = JSON.parse(authData);
-          return parsed.doctorAddress === doctorAddress && parsed.simulated === false;
-        }
-      }
-      return false;
-    } else {
-      // Testnet/Mainnet için blockchain kontrolü
-      const contract = getHealthchainContract(network);
-      const result = await fetchCallReadOnlyFunction({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'is-doctor-authorized',
-        functionArgs: [principalCV(patientAddress), principalCV(doctorAddress)],
-        network: STACKS_TESTNET,
-        senderAddress: patientAddress,
-      });
-      
-      if (typeof result === 'string') {
-        return result === 'true';
-      }
-      return false;
-    }
+    console.log('🔗 Authorizing doctor on blockchain...');
+    
+    const result = await callPublicFunction(
+      network,
+      'mint-access-token',
+      [userAddress, doctorAddress, 1000], // patient, doctor, expires-at
+      userAddress
+    );
+    
+    console.log('✅ Doctor authorization successful:', result);
+    return result;
   } catch (error) {
-    console.error('Error checking doctor authorization:', error);
+    console.error('❌ Doctor authorization failed:', error);
+    throw error;
+  }
+};
+
+export const revokeDoctor = async (network: Network, doctorAddress: string, userAddress: string) => {
+  try {
+    console.log('🔗 Revoking doctor authorization on blockchain...');
+    
+    // First get the token ID
+    const tokenId = await getAccessTokenId(network, userAddress);
+    if (!tokenId) {
+      throw new Error('No access token found to burn');
+    }
+    
+    const result = await callPublicFunction(
+      network,
+      'burn-access-token',
+      [tokenId],
+      userAddress
+    );
+    
+    console.log('✅ Doctor revocation successful:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Doctor revocation failed:', error);
+    throw error;
+  }
+};
+
+export const checkUserAccess = async (patientAddress: string, doctorAddress: string, network: Network) => {
+  try {
+    console.log('🔍 Checking access permissions on blockchain...');
+    
+    const result = await callReadOnlyFunction(
+      network,
+      'check-access',
+      [patientAddress, doctorAddress],
+      doctorAddress
+    );
+    
+    console.log('📊 Access check result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Access check failed:', error);
     return false;
   }
 };
 
-// Get doctor permissions for patient
-export const getDoctorPermissions = async (patientAddress: string, doctorAddress: string, network: Network): Promise<string[]> => {
+export const getUserAccessTokens = async (network: Network, userAddress: string) => {
   try {
-    // Mock response - in production, call the contract's read-only function
-    return ['read'];
+    console.log('🔍 Getting user access tokens from blockchain...');
+    
+    const hasToken = await checkHasAccessToken(network, userAddress);
+    const tokenId = hasToken ? await getTokenId(network, userAddress) : null;
+    
+    // Return array format that frontend expects
+    if (hasToken && tokenId !== null) {
+      // Convert tokenId to number if it's a ClarityValue
+      const numericTokenId = typeof tokenId === 'object' && tokenId !== null ? 
+        (tokenId as any).value || 0 : 
+        Number(tokenId) || 0;
+      
+      return [{
+        tokenId: numericTokenId,
+        owner: userAddress,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        network: network
+      }];
+    }
+    
+    return [];
   } catch (error) {
-    console.error('Error getting doctor permissions:', error);
+    console.error('❌ Getting access tokens failed:', error);
     return [];
   }
 };
 
-// Get token owner
-export const getTokenOwner = async (tokenId: number, network: Network): Promise<string | null> => {
+export const deleteAccessToken = async (network: Network, userAddress: string) => {
   try {
-    // Mock response - in production, call the contract's read-only function
-    return null;
-  } catch (error) {
-    console.error('Error getting token owner:', error);
-    return null;
-  }
-};
-
-// Get patient's token ID
-export const getPatientTokenId = async (patientAddress: string, network: Network): Promise<number | null> => {
-  try {
-    // Mock response - in production, call the contract's read-only function
-    return 1;
-  } catch (error) {
-    console.error('Error getting patient token ID:', error);
-    return null;
-  }
-};
-
-// NFT trait functions
-export const getTokenUri = async (tokenId: number, network: Network): Promise<string | null> => {
-  try {
-    // Mock response - in production, call the contract's read-only function
-    return 'https://healthchain.com/metadata/';
-  } catch (error) {
-    console.error('Error getting token URI:', error);
-    return null;
-  }
-};
-
-export const getLastTokenId = async (network: Network): Promise<number> => {
-  try {
-    // Mock response - in production, call the contract's read-only function
-    return 1;
-  } catch (error) {
-    console.error('Error getting last token ID:', error);
-    return 0;
-  }
-};
-
-// Utility functions for React integration
-
-// Check if current user has access to patient data
-export const checkUserAccess = async (patientAddress: string, userAddress: string, network: Network): Promise<boolean> => {
-  // Check if user is the patient (has access token)
-  const hasToken = await checkHasAccessToken(userAddress, network);
-  if (hasToken && patientAddress === userAddress) {
-    return true;
-  }
-  
-  // Check if user is an authorized doctor
-  const isAuthorized = await checkDoctorAuthorization(patientAddress, userAddress, network);
-  return isAuthorized;
-};
-
-// Get all authorized doctors for a patient
-export const getAuthorizedDoctors = async (patientAddress: string, network: Network): Promise<string[]> => {
-  // In production, you'd query the blockchain for all doctor authorizations
-  // For now, return mock data
-  return [];
-};
-
-// Verify NFT ownership for access
-export const verifyNFTAccess = async (userAddress: string, tokenId: number, network: Network): Promise<boolean> => {
-  const owner = await getTokenOwner(tokenId, network);
-  return owner === userAddress;
-};
-
-// Utility function to convert buffer to string
-export const bufferToString = (buffer: any): string => {
-  if (typeof buffer === 'string') {
-    return buffer;
-  }
-  
-  if (buffer && typeof buffer === 'object' && buffer.type === 'Buffer') {
-    return Buffer.from(buffer.data).toString('utf8');
-  }
-  
-  if (buffer && typeof buffer === 'object' && Array.isArray(buffer)) {
-    return Buffer.from(buffer).toString('utf8');
-  }
-  
-  return JSON.stringify(buffer);
-};
-
-// Profile functions for PatientProfile component
-export const createProfileOnChain = async (profileData: any, network: Network) => {
-  const contract = getHealthchainContract(network);
-  
-  try {
-    if (isDevnetEnvironment()) {
-      // Devnet için Hiro Platform API ile gerçek blockchain işlemi
-      console.log('Devnet: Profil oluşturma işlemi başlatılıyor');
-      
-      const apiKey = process.env.NEXT_PUBLIC_HIRO_API_KEY;
-      if (!apiKey || apiKey === 'your_hiro_platform_api_key_here') {
-        throw new Error('Hiro Platform API key gerekli.');
-      }
-      
-      const response = await fetch('https://api.hiro.so/v2/contracts/call', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey
-        },
-        body: JSON.stringify({
-          contract_id: `${contract.contractAddress}.${contract.contractName}`,
-          function_name: 'create-profile',
-          function_args: [stringUtf8CV(JSON.stringify(profileData)).toString()],
-          network: 'devnet'
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Hiro API Error: ${response.status} - ${errorData}`);
-      }
-      
-      const result = await response.json();
-      console.log('Devnet profile creation response:', result);
-      
-      return result.txid || 'devnet-profile-tx-' + Date.now();
-    } else {
-      // Testnet/Mainnet için Hiro Wallet bağlantısı
-      await openContractCall({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: 'create-profile',
-        functionArgs: [stringUtf8CV(JSON.stringify(profileData))],
-        network,
-      });
+    console.log('🔗 Burning NFT token on blockchain...');
+    
+    // First get the token ID
+    const tokenId = await getAccessTokenId(network, userAddress);
+    if (!tokenId) {
+      throw new Error('No access token found to burn');
     }
-    return true;
+    
+    const result = await callPublicFunction(
+      network,
+      'burn-access-token',
+      [tokenId],
+      userAddress
+    );
+    
+    console.log('✅ NFT token burned successfully:', result);
+    return result;
   } catch (error) {
-    console.error('Error creating profile:', error);
+    console.error('❌ NFT token burning failed:', error);
     throw error;
   }
 };
 
-export const generateProfileHash = (profileData: any): string => {
-  // Basit hash oluşturma (gerçek uygulamada daha güvenli hash kullanılmalı)
-  const dataString = JSON.stringify(profileData);
-  let hash = 0;
-  for (let i = 0; i < dataString.length; i++) {
-    const char = dataString.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+export const addHealthRecord = async (network: Network, patientAddress: string, recordType: string, description: string, data: string, doctorAddress: string) => {
+  try {
+    console.log('🔗 Adding health record on blockchain...');
+    
+    const recordData = `${recordType}: ${description} - ${data}`;
+    
+    const result = await callPublicFunction(
+      network,
+      'add-health-record',
+      [recordData],
+      patientAddress
+    );
+    
+    console.log('✅ Health record added successfully:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Health record addition failed:', error);
+    throw error;
   }
-  return Math.abs(hash).toString(16);
+};
+
+export const getPatientRecords = async (network: Network, patientAddress: string) => {
+  try {
+    console.log('🔍 Getting patient records from blockchain...');
+    
+    const result = await callReadOnlyFunction(
+      network,
+      'get-patient-records',
+      [patientAddress],
+      patientAddress
+    );
+    
+    console.log('📊 Patient records result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Getting patient records failed:', error);
+    return [];
+  }
+};
+
+// Add missing database functions that are being imported
+export const createPatientProfile = async (walletAddress: string, profileData: any) => {
+  return await savePatientProfile(walletAddress, profileData);
+};
+
+export const createDoctorProfile = async (walletAddress: string, profileData: any) => {
+  return await saveDoctorProfile(walletAddress, profileData);
+};
+
+export const getProfileByWalletAddress = async (walletAddress: string) => {
+  // Try patient profile first, then doctor profile
+  const patientProfile = await getPatientProfileByWallet(walletAddress);
+  if (patientProfile) return patientProfile;
+  const doctorProfile = await getDoctorProfileByWallet(walletAddress);
+  return doctorProfile;
+};
+
+export const saveHealthRecordToDatabase = async (patientAddress: string, recordData: any) => {
+  return await saveHealthRecord(patientAddress, recordData);
+};
+
+export const saveDoctorAuthorizationToDatabase = async (patientAddress: string, doctorAddress: string, permissions: string[]) => {
+  return await saveDoctorAuthorization(patientAddress, doctorAddress, permissions);
+};
+
+export const getAccessTokenId = async (network: Network, userAddress: string) => {
+  // This should call the correct read-only function
+  try {
+    const result = await callReadOnlyFunction(
+      network,
+      'get-access-token-id',
+      [userAddress, userAddress],
+      userAddress
+    );
+    return result;
+  } catch (error) {
+    return null;
+  }
 }; 

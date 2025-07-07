@@ -3,15 +3,15 @@
 import { Box, Button, Container, Flex, Link } from '@chakra-ui/react';
 import { useContext, useCallback } from 'react';
 import { HiroWalletContext } from './HiroWalletProvider';
-import { useDevnetWallet } from '@/lib/devnet-wallet-context';
-import { DevnetWalletButton } from './DevnetWalletButton';
+
+
 import { ConnectWalletButton } from './ConnectWallet';
 import { NetworkSelector } from './NetworkSelector';
-import { isDevnetEnvironment, useNetwork } from '@/lib/use-network';
+import { isTestnetEnvironment, useNetwork } from '@/lib/use-network';
 
 export const Navbar = () => {
   const { isWalletConnected } = useContext(HiroWalletContext);
-  const { currentWallet, wallets, setCurrentWallet } = useDevnetWallet();
+
   const network = useNetwork();
 
   const handleConnect = useCallback(async () => {
@@ -67,15 +67,7 @@ export const Navbar = () => {
               <Box>Şifreleme</Box>
             </Link>
             <NetworkSelector />
-            {isDevnetEnvironment() ? (
-              <DevnetWalletButton
-                currentWallet={currentWallet}
-                wallets={wallets}
-                onWalletSelect={setCurrentWallet}
-              />
-            ) : (
-              <ConnectWalletButton />
-            )}
+                          <ConnectWalletButton />
           </Flex>
         </Flex>
       </Container>

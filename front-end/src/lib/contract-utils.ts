@@ -1,4 +1,4 @@
-import { DEVNET_NETWORK } from '@/constants/devnet';
+import { STACKS_TESTNET } from '@stacks/network';
 import { ContractCallRegularOptions, FinishedTxData, request } from '@stacks/connect';
 
 import {
@@ -8,52 +8,33 @@ import {
   ClarityValue,
   PostCondition,
   PostConditionMode,
+  principalCV,
+  stringAsciiCV,
+  listCV,
+  uintCV,
+  boolCV,
+  noneCV,
+  someCV,
 } from '@stacks/transactions';
 import { generateWallet } from '@stacks/wallet-sdk';
-import { DevnetWallet } from './devnet-wallet-context';
-import { isDevnetEnvironment } from './use-network';
+import { isTestnetEnvironment } from './use-network';
 import { TransactionResult } from '@stacks/connect/dist/types/methods';
+import { Network } from './network';
+import { getHealthchainContract } from './clarity-utils';
 
 interface DirectCallResponse {
   txid: string;
 }
 
-export const shouldUseDirectCall = isDevnetEnvironment;
+export const shouldUseDirectCall = () => false; // No longer needed for testnet
 
+// This function is no longer needed since we're using real wallet integration
 export const executeContractCall = async (
   txOptions: ContractCallRegularOptions,
-  currentWallet: DevnetWallet | null
+  currentWallet: any
 ): Promise<DirectCallResponse> => {
-  const mnemonic = currentWallet?.mnemonic;
-  if (!mnemonic) throw new Error('Devnet wallet not configured');
-
-  const wallet = await generateWallet({
-    secretKey: mnemonic,
-    password: 'password',
-  });
-
-  const contractCallTxOptions: SignedContractCallOptions = {
-    ...txOptions,
-    network: DEVNET_NETWORK,
-    senderKey: wallet.accounts[0].stxPrivateKey,
-    functionArgs: txOptions.functionArgs as ClarityValue[],
-    postConditions: txOptions.postConditions as PostCondition[],
-    postConditionMode: PostConditionMode.Allow,
-    fee: 1000,
-  };
-
-  const transaction = await makeContractCall(contractCallTxOptions);
-
-  const response = await broadcastTransaction({
-    transaction,
-    network: contractCallTxOptions.network,
-  });
-
-  if ('error' in response) {
-    throw new Error(response.error || 'Transaction failed');
-  }
-
-  return { txid: response.txid };
+  // This function is deprecated - use openContractCall instead
+  throw new Error('Use openContractCall with Hiro Wallet instead');
 };
 
 export const openContractCall = async (options: ContractCallRegularOptions) => {
@@ -88,6 +69,105 @@ export const openContractCall = async (options: ContractCallRegularOptions) => {
     if (error instanceof Error && error.message?.includes('cancelled') && options.onCancel) {
       options.onCancel();
     }
+    throw error;
+  }
+};
+
+// New functions for real blockchain operations
+
+export const callReadOnlyFunction = async (
+  network: Network,
+  functionName: string,
+  functionArgs: any[],
+  senderAddress: string
+) => {
+  try {
+    const contract = getHealthchainContract(network);
+    
+    // Convert function args to ClarityValues
+    const clarityArgs: ClarityValue[] = functionArgs.map(arg => {
+      if (typeof arg === 'string') {
+        return principalCV(arg);
+      } else if (typeof arg === 'number') {
+        return uintCV(arg);
+      } else if (typeof arg === 'boolean') {
+        return boolCV(arg);
+      } else if (Array.isArray(arg)) {
+        return listCV(arg.map(item => stringAsciiCV(item)));
+      } else {
+        return stringAsciiCV(String(arg));
+      }
+    });
+
+    const result = await request({}, 'stx_callReadOnlyFunction', {
+      contractAddress: contract.contractAddress,
+      contractName: contract.contractName,
+      functionName,
+      functionArgs: clarityArgs,
+      network: isTestnetEnvironment(network) ? 'testnet' : 'mainnet',
+      senderAddress,
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Read-only function call failed:', error);
+    throw error;
+  }
+};
+
+export const callPublicFunction = async (
+  network: Network,
+  functionName: string,
+  functionArgs: any[],
+  senderAddress: string
+) => {
+  try {
+    const contract = getHealthchainContract(network);
+    
+    // Convert function args to ClarityValues
+    const clarityArgs: ClarityValue[] = functionArgs.map(arg => {
+      if (typeof arg === 'string') {
+        return principalCV(arg);
+      } else if (typeof arg === 'number') {
+        return uintCV(arg);
+      } else if (typeof arg === 'boolean') {
+        return boolCV(arg);
+      } else if (Array.isArray(arg)) {
+        return listCV(arg.map(item => stringAsciiCV(item)));
+      } else {
+        return stringAsciiCV(String(arg));
+      }
+    });
+
+    console.log('🔗 Calling public function:', {
+      contract: `${contract.contractAddress}.${contract.contractName}`,
+      functionName,
+      functionArgs: clarityArgs,
+      network: isTestnetEnvironment(network) ? 'testnet' : 'mainnet',
+      senderAddress
+    });
+
+    const result = await openContractCall({
+      contractAddress: contract.contractAddress,
+      contractName: contract.contractName,
+      functionName,
+      functionArgs: clarityArgs,
+      network: isTestnetEnvironment(network) ? STACKS_TESTNET : network,
+      anchorMode: 3, // Any
+      fee: 5000, // 0.005 STX fee
+      onFinish: (data) => {
+        console.log('✅ Transaction finished:', data);
+        console.log('📊 Transaction ID:', data.txId);
+      },
+      onCancel: () => {
+        console.log('❌ Transaction cancelled by user');
+      },
+    });
+
+    console.log('📤 Transaction sent:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Public function call failed:', error);
     throw error;
   }
 };

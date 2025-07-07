@@ -1,8 +1,8 @@
-import { isDevnetEnvironment, isTestnetEnvironment } from '@/lib/use-network';
+import { isTestnetEnvironment } from '@/lib/use-network';
 import { Network } from '@/lib/network';
 
 export const getHealthchainContractAddress = (network: Network) => {
-  if (isDevnetEnvironment()) {
+  if (isTestnetEnvironment(network)) {
     return (
       process.env.NEXT_PUBLIC_DEPLOYER_ACCOUNT_ADDRESS ||
       'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'
@@ -18,6 +18,6 @@ export const getHealthchainContractAddress = (network: Network) => {
 export const getHealthchainContract = (network: Network) => {
   return {
     contractAddress: getHealthchainContractAddress(network),
-    contractName: 'healthchain',
+    contractName: 'healthchain-v2',
   } as const;
 };

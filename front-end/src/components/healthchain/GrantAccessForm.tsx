@@ -1,49 +1,112 @@
 "use client";
 
 import React, { useState, FormEvent } from "react";
-import { useDevnetWallet } from "@/lib/devnet-wallet-context";
-import { authorizeDoctor, checkHasAccessToken } from "@/lib/healthchain/operations";
+import { 
+  authorizeDoctor, 
+  checkHasAccessToken,
+  saveDoctorAuthorizationToDatabase,
+  checkDoctorAuthorizationInDatabase
+} from "@/lib/healthchain/operations";
 import { useNetwork } from "@/lib/use-network";
+import { useCurrentAddress } from "@/hooks/useCurrentAddress";
+
+// Simple UI components
+const Card = ({ children, className = "" }: any) => (
+  <div className={`bg-white rounded-lg shadow-md p-6 ${className}`}>
+    {children}
+  </div>
+);
+
+const Button = ({ children, onClick, className = "", colorScheme = "blue" }: any) => (
+  <button
+    onClick={onClick}
+    className={`px-4 py-2 rounded text-white font-medium hover:opacity-90 transition-opacity ${
+      colorScheme === "emerald" ? "bg-emerald-500" : "bg-blue-500"
+    } ${className}`}
+  >
+    {children}
+  </button>
+);
+
+const Input = ({ value, onChange, placeholder, className = "" }: any) => (
+  <input
+    type="text"
+    value={value}
+    onChange={onChange}
+    placeholder={placeholder}
+    className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+  />
+);
+
+const Checkbox = ({ checked, onChange, label }: any) => (
+  <label className="flex items-center space-x-2">
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+    />
+    <span className="text-sm">{label}</span>
+  </label>
+);
 
 export default function GrantAccessForm() {
-  const { currentWallet } = useDevnetWallet();
+  const stxAddress = useCurrentAddress();
   const network = useNetwork();
   const [doctor, setDoctor] = useState("");
   const [permissions, setPermissions] = useState<string[]>(["read"]);
-  const [status, setStatus] = useState<null | string>(null);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setStatus(null);
-    setLoading(true);
-    
-    if (!doctor.trim()) {
-      setStatus("Doktor adresi giriniz.");
-      setLoading(false);
+    if (!stxAddress) {
+      setStatus("Cüzdan bağlanmalı!");
       return;
     }
 
-    if (!currentWallet) {
-      setStatus("Lütfen cüzdanınızı bağlayın.");
-      setLoading(false);
+    if (!doctor.trim()) {
+      setStatus("Doktor adresi gerekli!");
       return;
     }
+
+    setLoading(true);
+    setStatus("Yetkilendirme işlemi başlatılıyor...");
 
     try {
       // Önce kullanıcının access token'ı olup olmadığını kontrol et
-      const hasToken = await checkHasAccessToken(currentWallet.stxAddress, network);
+      const hasToken = await checkHasAccessToken(stxAddress, network);
       if (!hasToken) {
-        setStatus("❌ Önce bir erişim token'ı (NFT) oluşturmanız gerekiyor.");
+        setStatus("❌ Önce bir erişim token'ı oluşturmanız gerekiyor.");
         setLoading(false);
         return;
       }
 
-      // Tüm cüzdanlar için blockchain işlemi
-      setStatus("Hiro Wallet ile doktor yetkilendirin...");
-      
+      // Doktorun zaten yetkili olup olmadığını kontrol et
+      const isAlreadyAuthorized = await checkDoctorAuthorizationInDatabase(stxAddress, doctor);
+      if (isAlreadyAuthorized) {
+        setStatus("❌ Bu doktor zaten yetkilendirilmiş.");
+        setLoading(false);
+        return;
+      }
+
+      // Veritabanına yetkilendirme kaydet
+      setStatus("Veritabanına yetkilendirme kaydediliyor...");
+      await saveDoctorAuthorizationToDatabase({
+        patientWalletAddress: stxAddress,
+        doctorWalletAddress: doctor,
+        permissions: permissions,
+      });
+
+      // Blockchain'e yetkilendirme işlemi gönder
+      setStatus("Blockchain'e yetkilendirme işlemi gönderiliyor...");
       await authorizeDoctor(doctor, permissions, network);
-      setStatus("✅ Doktor yetkilendirildi! İşlem blockchain'e gönderildi.");
+      
+      setStatus("✅ Doktor yetkilendirme işlemi tamamlandı! Hem veritabanına hem blockchain'e kaydedildi.");
+      
+      // Formu temizle
+      setDoctor("");
+      setPermissions(["read"]);
     } catch (err) {
       console.error('Error:', err);
       setStatus("❌ Doktor yetkilendirilirken hata oluştu: " + (err as Error).message);
@@ -52,60 +115,80 @@ export default function GrantAccessForm() {
     }
   };
 
+  const handlePermissionChange = (permission: string, checked: boolean) => {
+    if (checked) {
+      setPermissions(prev => [...prev, permission]);
+    } else {
+      setPermissions(prev => prev.filter(p => p !== permission));
+    }
+  };
+
+  if (!stxAddress) {
+    return (
+      <Card>
+        <h3 className="text-lg font-semibold text-blue-600 mb-4">
+          🔐 Doktor Erişimi Ver
+        </h3>
+        <p className="text-gray-600">Lütfen önce cüzdanınızı bağlayın.</p>
+      </Card>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded p-6 shadow mb-6">
-      <h2 className="text-xl font-bold mb-2 text-emerald-600">Doktor Yetkilendir</h2>
+    <Card>
+      <h3 className="text-lg font-semibold text-blue-600 mb-4">
+        🔐 Doktor Erişimi Ver
+      </h3>
       
-      <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
-        <p className="text-sm text-green-700">
-          <strong>🔗 Blockchain İşlemi:</strong> Hiro Wallet ile gerçek işlem yapılacak.
-        </p>
-      </div>
-      
-      <input
-        className="w-full border rounded p-2 mb-2"
-        type="text"
-        placeholder="Doktorun Stacks adresi"
-        value={doctor}
-        onChange={e => setDoctor(e.target.value)}
-        required
-        disabled={loading}
-      />
-      
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          İzinler:
-        </label>
-        <div className="space-y-2">
-          {["read", "write", "delete"].map((permission) => (
-            <label key={permission} className="flex items-center">
-              <input
-                type="checkbox"
-                checked={permissions.includes(permission)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setPermissions([...permissions, permission]);
-                  } else {
-                    setPermissions(permissions.filter(p => p !== permission));
-                  }
-                }}
-                className="mr-2"
-                disabled={loading}
-              />
-              <span className="text-sm">{permission}</span>
-            </label>
-          ))}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Doktor Adresi</label>
+          <Input
+            value={doctor}
+            onChange={(e: any) => setDoctor(e.target.value)}
+            placeholder="ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Doktorun Stacks cüzdan adresini girin
+          </p>
         </div>
-      </div>
-      
-      <button
-        type="submit"
-        className={`bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        disabled={loading}
-      >
-        {loading ? 'İşleniyor...' : 'Doktor Yetkilendir'}
-      </button>
-      {status && <div className="mt-2 text-sm">{status}</div>}
-    </form>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">İzinler</label>
+          <div className="space-y-2">
+            <Checkbox
+              checked={permissions.includes("read")}
+              onChange={(e: any) => handlePermissionChange("read", e.target.checked)}
+              label="Sağlık verilerini görüntüleme"
+            />
+            <Checkbox
+              checked={permissions.includes("write")}
+              onChange={(e: any) => handlePermissionChange("write", e.target.checked)}
+              label="Sağlık verilerini güncelleme"
+            />
+            <Checkbox
+              checked={permissions.includes("delete")}
+              onChange={(e: any) => handlePermissionChange("delete", e.target.checked)}
+              label="Sağlık verilerini silme"
+            />
+          </div>
+        </div>
+
+        <Button
+          type="submit"
+          colorScheme="blue"
+          className="w-full"
+          disabled={loading}
+        >
+          {loading ? "İşlem Yapılıyor..." : "Doktoru Yetkilendir"}
+        </Button>
+      </form>
+
+      {status && (
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+          {status}
+        </div>
+      )}
+    </Card>
   );
 } 

@@ -16,12 +16,8 @@ export const useNetwork = (): Network => {
   return network;
 };
 
-export const isDevnetEnvironment = () => {
-  return process.env.NEXT_PUBLIC_STACKS_NETWORK === 'devnet';
-};
-
-export const isTestnetEnvironment = (network: Network | null) => {
-  return network === 'testnet';
+export const isTestnetEnvironment = (network?: Network | null) => {
+  return network === 'testnet' || process.env.NEXT_PUBLIC_STACKS_NETWORK === 'testnet';
 };
 
 export const isMainnetEnvironment = (network: Network | null) => {

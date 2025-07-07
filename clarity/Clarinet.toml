@@ -1,20 +1,23 @@
 [project]
-name = 'healthchain'
-description = 'Decentralized health record system on Stacks blockchain'
+name = 'clarity'
+description = ''
 authors = []
 telemetry = true
 cache_dir = './.cache'
-
-[contracts.healthchain]
-path = 'contracts/healthchain.clar'
+requirements = []
+[contracts.healthchain-v2]
+path = 'contracts/healthchain-v2.clar'
 clarity_version = 3
-epoch = 3.0
-
+epoch = 3.1
 [repl.analysis]
-passes = []
+passes = ['check_checker']
 
 [repl.analysis.check_checker]
 strict = false
-trusted_sender = true
+trusted_sender = false
 trusted_caller = false
 callee_filter = false
+
+[repl.remote_data]
+enabled = false
+api_url = 'https://api.hiro.so'
