@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Contract content
-const contractContent = fs.readFileSync(path.join(__dirname, 'clarity/contracts/healthchain.clar'), 'utf8');
+const contractContent = fs.readFileSync(path.join(__dirname, 'clarity/contracts/healthchain_v4.clar'), 'utf8');
 
 // Deploy contract to testnet
 async function deployContract() {

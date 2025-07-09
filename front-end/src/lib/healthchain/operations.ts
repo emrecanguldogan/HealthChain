@@ -3,7 +3,7 @@ import { Network } from '@/lib/network';
 import { callReadOnlyFunction, callPublicFunction } from '@/lib/contract-utils';
 
 // Contract name
-const CONTRACT_NAME = 'healthchain';
+const CONTRACT_NAME = 'healthchain_v4';
 
 // Database schema
 interface HealthChainDB extends DBSchema {

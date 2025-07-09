@@ -28,7 +28,7 @@ HealthChain is a decentralized application (dApp) that transforms the traditiona
 
 ## 📋 Contract Address
 
-**Testnet Contract Address**: `ST2CEP848SACBBX7KHVC4TBZXBV0JH6SC0WF439NF.healthchain`
+**Testnet Contract Address**: `ST2CEP848SACBBX7KHVC4TBZXBV0JH6SC0WF439NF.healthchain_v4`
 
 ## 🏗️ Project Structure
 
@@ -36,7 +36,7 @@ HealthChain is a decentralized application (dApp) that transforms the traditiona
 HealthChain/
 ├── clarity/
 │   ├── contracts/
-│   │   └── healthchain.clar          # Main smart contract
+│   │   └── healthchain_v4.clar          # Main smart contract
 │   ├── deployments/
 │   │   └── default.devnet-plan.yaml  # Deployment configuration
 │   └── Clarinet.toml                 # Clarinet configuration
@@ -77,7 +77,7 @@ HealthChain/
 3. **Deploy the smart contract**
    ```bash
    cd ../clarity
-   clarinet contracts deploy healthchain
+   clarinet contracts deploy healthchain_v4
    ```
 
 4. **Start the development server**

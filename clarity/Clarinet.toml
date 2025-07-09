@@ -6,7 +6,7 @@ telemetry = true
 cache_dir = './.cache'
 requirements = []
 [contracts.healthchain_v4]
-path = 'contracts/healthchain.clar'
+path = 'contracts/healthchain_v4.clar'
 clarity_version = 3
 epoch = 3.1
 [repl.analysis]
