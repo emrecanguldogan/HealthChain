@@ -8,6 +8,14 @@ plan:
   batches:
     - id: 0
       transactions:
+        - requirement-publish:
+            contract-id: ST2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9.nft-trait
+            remap-sender: ST15SXV1HSQ3FRHKCZKEVJCTMYWN0C9GWXFV5XV8G
+            remap-principals:
+              ST2PABAF9FTAJYNFZH93XENAJ8FVY99RRM50D2JG9: ST15SXV1HSQ3FRHKCZKEVJCTMYWN0C9GWXFV5XV8G
+            cost: 4680
+            path: .cache/requirements/nft-trait.clar
+            clarity-version: 1
         - contract-publish:
             contract-name: healthchain_v4
             expected-sender: ST15SXV1HSQ3FRHKCZKEVJCTMYWN0C9GWXFV5XV8G

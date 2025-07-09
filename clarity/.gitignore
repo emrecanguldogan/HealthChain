@@ -1,7 +1,8 @@
-
+# .cache/requirements/ trait dosyalarını takip et
 **/settings/Mainnet.toml
 **/settings/Testnet.toml
-.cache/**
+.cache/*
+!/.cache/requirements/
 history.txt
 
 logs
