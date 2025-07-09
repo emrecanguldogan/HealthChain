@@ -1,4 +1,3 @@
-import { DEVNET_STACKS_BLOCKCHAIN_API_URL } from '@/constants/devnet';
 import {
   Configuration,
   SmartContractsApi,
@@ -15,7 +14,7 @@ import {
   NonFungibleTokensApi,
   ConfigurationParameters,
 } from '@stacks/blockchain-api-client';
-import { isDevnetEnvironment, isTestnetEnvironment } from './use-network';
+import { isTestnetEnvironment } from './use-network';
 import { Network } from '@/lib/network';
 type HTTPHeaders = Record<string, string>;
 
@@ -60,9 +59,6 @@ export function apiClients(config: Configuration) {
 }
 
 export function getApiUrl(network: Network) {
-  if (isDevnetEnvironment()) {
-    return DEVNET_STACKS_BLOCKCHAIN_API_URL || 'http://localhost:3999';
-  }
   if (isTestnetEnvironment(network)) {
     return 'https://api.testnet.hiro.so';
   }

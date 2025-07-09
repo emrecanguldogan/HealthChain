@@ -23,12 +23,6 @@ export const NetworkSelector: FC = () => {
   const menuHoverBg = useColorModeValue('gray.50', 'gray.700');
 
   const networks = [
-    // {
-    //   name: 'Stacks Mainnet',
-    //   value: 'mainnet' as Network,
-    //   endpoint: 'api.hiro.so',
-    //   status: 'online',
-    // },
     {
       name: 'Stacks Testnet',
       value: 'testnet' as Network,
@@ -36,9 +30,9 @@ export const NetworkSelector: FC = () => {
       status: 'online',
     },
     {
-      name: 'Devnet',
-      value: 'devnet' as Network,
-      endpoint: 'api.platform.hiro.so',
+      name: 'Stacks Mainnet',
+      value: 'mainnet' as Network,
+      endpoint: 'api.hiro.so',
       status: 'online',
     },
   ];

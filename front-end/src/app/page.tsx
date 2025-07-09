@@ -1,28 +1,39 @@
 "use client";
 
-import { useDevnetWallet } from "@/lib/devnet-wallet-context";
-import MintAccessToken from "@/components/healthchain/MintAccessToken";
-import GrantAccessForm from "@/components/healthchain/GrantAccessForm";
-import RecordUploadForm from "@/components/healthchain/RecordUploadForm";
-import ViewRecord from "@/components/healthchain/ViewRecord";
-import { Alert, AlertIcon, AlertTitle, AlertDescription, Button, Text, Switch, FormControl, FormLabel } from "@chakra-ui/react";
-import { useState, useEffect } from "react";
-import { isDevnetEnvironment } from "@/lib/use-network";
+import { useContext } from "react";
+import { HiroWalletContext } from "@/components/HiroWalletProvider";
+import { useNetwork } from "@/lib/use-network";
+import PatientProfile from "@/components/healthchain/PatientProfile";
+import DoctorProfile from "@/components/healthchain/DoctorProfile";
+import { 
+  Alert, 
+  AlertIcon, 
+  AlertTitle, 
+  AlertDescription, 
+  Button, 
+  Text, 
+  VStack,
+  HStack,
+  Heading,
+  Box,
+  useColorModeValue,
+  Card,
+  CardBody,
+  CardHeader,
+  Badge,
+  Divider,
+} from "@chakra-ui/react";
 
 export default function Home() {
-  const { currentWallet, setCurrentWallet, wallets } = useDevnetWallet();
-  const [isTestMode, setIsTestMode] = useState(false); // Test modu kapalı - gerçek blockchain işlemleri
-
-  // Devnet modunda otomatik olarak ilk wallet'ı seç
-  useEffect(() => {
-    if (isDevnetEnvironment() && !currentWallet && wallets.length > 0) {
-      setCurrentWallet(wallets[0]); // İlk wallet'ı otomatik seç
-    }
-  }, [isDevnetEnvironment(), currentWallet, wallets, setCurrentWallet]);
+  const { testnetAddress, mainnetAddress, network, isWalletConnected, authenticate } = useContext(HiroWalletContext);
+  const currentNetwork = useNetwork();
+  const cardBg = useColorModeValue("white", "gray.800");
+  
+  const currentAddress = currentNetwork === 'testnet' ? testnetAddress : mainnetAddress;
 
   return (
     <main className="min-h-screen bg-slate-900 flex flex-col items-center justify-center py-12">
-      <div className="max-w-xl w-full">
+      <div className="max-w-4xl w-full px-4">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             {/* Medical icon (Heroicons style) */}
@@ -32,96 +43,176 @@ export default function Home() {
           </div>
           <h1 className="text-4xl font-extrabold text-emerald-600 mb-2">HealthChain</h1>
           <p className="text-lg text-slate-200 font-medium">
-            NFT-based Health Data Access Control
+            NFT-based Health Data Access Control on Stacks Testnet
           </p>
           <p className="text-sm text-slate-400 mt-2">
-            Own your health data. Share it with trusted doctors using NFTs.
+            Own your health data. Share it with trusted doctors using NFTs on the blockchain.
           </p>
         </div>
 
-        {!currentWallet && !isDevnetEnvironment() && (
-          <Alert status="warning" mb={6} borderRadius="md">
-            <AlertIcon />
-            <div>
-              <AlertTitle>Wallet Seçimi Gerekli!</AlertTitle>
-              <AlertDescription>
-                Sağ üst köşeden bir devnet wallet seçin veya{" "}
-                <a href="/wallet-select" style={{ color: '#059669', textDecoration: 'underline' }}>
-                  buraya tıklayarak
-                </a>{" "}
-                wallet seçim sayfasına gidin. Farklı adreslerle test edebilirsiniz.
-              </AlertDescription>
-            </div>
-          </Alert>
-        )}
-
-        {currentWallet && (
-          <Alert status="success" mb={6} borderRadius="md">
-            <AlertIcon />
-            <div style={{ width: '100%' }}>
-              <AlertTitle>Wallet Bağlandı!</AlertTitle>
-              <AlertDescription>
-                <Text fontWeight="bold">
-                  {currentWallet.profileData?.name || currentWallet.label}
+        {!isWalletConnected && (
+          <Card bg={cardBg} shadow="lg" mb={6}>
+            <CardHeader>
+              <Heading size="md" color="orange.600">
+                🔗 Wallet Bağlantısı Gerekli
+              </Heading>
+            </CardHeader>
+            <CardBody>
+              <VStack spacing={4}>
+                <Text>
+                  HealthChain'i kullanmak için Hiro Wallet ile bağlanmanız gerekiyor.
                 </Text>
-                <Text fontSize="sm" color="gray.600">
-                  Rol: {currentWallet.role === 'deployer' ? 'Deployer' : 
-                        currentWallet.role === 'patient' ? 'Hasta' : 
-                        currentWallet.role === 'doctor' ? 'Doktor' : 'Test Kullanıcı'}
-                </Text>
-                <Text fontSize="xs" color="gray.500" fontFamily="mono">
-                  {currentWallet.stxAddress.substring(0, 8)}...{currentWallet.stxAddress.substring(currentWallet.stxAddress.length - 8)}
-                </Text>
-                
-                {/* Test Mode Toggle */}
-                <FormControl display="flex" alignItems="center" mt={3}>
-                  <FormLabel htmlFor="test-mode" mb="0" fontSize="sm">
-                    🧪 Test Modu
-                  </FormLabel>
-                  <Switch 
-                    id="test-mode" 
-                    isChecked={isTestMode}
-                    onChange={(e) => setIsTestMode(e.target.checked)}
-                    colorScheme="blue"
-                  />
-                </FormControl>
-                
-                <Text fontSize="xs" color="gray.500" mt={1}>
-                  {isTestMode ? 'Simülasyon modu aktif' : 'Gerçek blockchain işlemleri aktif'}
-                </Text>
-                
                 <Button 
-                  size="xs" 
-                  colorScheme="red" 
-                  variant="outline" 
-                  mt={2}
-                  onClick={() => {
-                    localStorage.removeItem('selected_wallet_address');
-                    window.location.reload();
-                  }}
+                  colorScheme="orange" 
+                  size="lg"
+                  onClick={authenticate}
                 >
-                  Wallet Temizle
+                  Hiro Wallet ile Bağlan
                 </Button>
-              </AlertDescription>
-            </div>
-          </Alert>
+                <Text fontSize="sm" color="gray.500">
+                  Stacks Testnet üzerinde gerçek blockchain işlemleri yapılacaktır.
+                </Text>
+              </VStack>
+            </CardBody>
+          </Card>
         )}
 
-        {/* NFT-based Access Control Flow */}
-        {(currentWallet || isDevnetEnvironment()) && (
-          <div className="space-y-6">
-            {/* Step 1: Mint Access Token (NFT) */}
-            <MintAccessToken />
-            
-            {/* Step 2: Grant Doctor Access */}
-            <GrantAccessForm />
-            
-            {/* Step 3: Upload Records */}
-            <RecordUploadForm />
-            
-            {/* Step 4: View Records */}
-            <ViewRecord />
-          </div>
+        {isWalletConnected && currentAddress && (
+          <Card bg={cardBg} shadow="lg" mb={6}>
+            <CardHeader>
+              <Heading size="md" color="green.600">
+                ✅ Wallet Bağlandı
+              </Heading>
+            </CardHeader>
+            <CardBody>
+              <VStack spacing={3} align="stretch">
+                <HStack justify="space-between">
+                  <Text fontWeight="bold">Adres:</Text>
+                  <Text fontSize="sm" fontFamily="mono">{currentAddress}</Text>
+                </HStack>
+                <HStack justify="space-between">
+                  <Text fontWeight="bold">Ağ:</Text>
+                  <Badge colorScheme={currentNetwork === 'testnet' ? 'orange' : 'green'}>
+                    {currentNetwork === 'testnet' ? 'Stacks Testnet' : 'Stacks Mainnet'}
+                  </Badge>
+                </HStack>
+                <HStack justify="space-between">
+                  <Text fontWeight="bold">Kontrat:</Text>
+                  <Text fontSize="sm" fontFamily="mono">
+                    ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8.healthchain_v5
+                  </Text>
+                </HStack>
+                <Divider />
+                <Text fontSize="sm" color="gray.600">
+                  <strong>Önemli:</strong> Tüm işlemler gerçek Stacks Testnet üzerinde yapılacaktır. 
+                  Testnet STX tokenlarına ihtiyacınız olabilir.
+                </Text>
+              </VStack>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* Main Application */}
+        {isWalletConnected && currentAddress && (
+          <VStack spacing={8} align="stretch">
+            {/* Role Selection */}
+            <Card bg={cardBg} shadow="md">
+              <CardHeader>
+                <Heading size="md" color="purple.600">
+                  🎭 Rol Seçimi
+                </Heading>
+              </CardHeader>
+              <CardBody>
+                <VStack spacing={4}>
+                  <Text>
+                    HealthChain'de hasta veya doktor olarak işlem yapabilirsiniz. 
+                    Aşağıdaki sekmelerden birini seçin:
+                  </Text>
+                  <HStack spacing={4} justify="center">
+                    <Button 
+                      colorScheme="emerald" 
+                      size="lg"
+                      onClick={() => window.location.href = '/profile'}
+                    >
+                      🏥 Hasta Profili
+                    </Button>
+                    <Button 
+                      colorScheme="blue" 
+                      size="lg"
+                      onClick={() => window.location.href = '/my-profile'}
+                    >
+                      👨‍⚕️ Doktor Profili
+                    </Button>
+                  </HStack>
+                </VStack>
+              </CardBody>
+            </Card>
+
+            {/* Contract Information */}
+            <Card bg={cardBg} shadow="md">
+              <CardHeader>
+                <Heading size="md" color="blue.600">
+                  📋 Kontrat Bilgileri
+                </Heading>
+              </CardHeader>
+              <CardBody>
+                <VStack spacing={3} align="stretch">
+                  <HStack justify="space-between">
+                    <Text fontWeight="bold">Kontrat Adresi:</Text>
+                    <Text fontSize="sm" fontFamily="mono">ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8</Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontWeight="bold">Kontrat Adı:</Text>
+                    <Text fontSize="sm" fontFamily="mono">healthchain_v5</Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontWeight="bold">Ağ:</Text>
+                    <Badge colorScheme="orange">Stacks Testnet</Badge>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontWeight="bold">Explorer:</Text>
+                    <a 
+                      href="https://explorer.hiro.so/address/ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8?chain=testnet" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ color: '#3182ce', textDecoration: 'underline' }}
+                    >
+                      Hiro Explorer'da Görüntüle
+                    </a>
+                  </HStack>
+                </VStack>
+              </CardBody>
+            </Card>
+
+            {/* How It Works */}
+            <Card bg={cardBg} shadow="md">
+              <CardHeader>
+                <Heading size="md" color="teal.600">
+                  🔄 Nasıl Çalışır?
+                </Heading>
+              </CardHeader>
+              <CardBody>
+                <VStack spacing={4} align="stretch">
+                  <Box>
+                    <Text fontWeight="bold" color="emerald.600">1. Rol Atama</Text>
+                    <Text fontSize="sm">Hasta veya doktor rolünü blockchain'e kaydedin.</Text>
+                  </Box>
+                  <Box>
+                    <Text fontWeight="bold" color="orange.600">2. NFT Token Oluşturma (Hasta)</Text>
+                    <Text fontSize="sm">Sağlık verilerinize erişim kontrolü için NFT tokeni oluşturun.</Text>
+                  </Box>
+                  <Box>
+                    <Text fontWeight="bold" color="blue.600">3. Doktor Erişimi Verme (Hasta)</Text>
+                    <Text fontSize="sm">Güvendiğiniz doktorlara NFT üzerinden erişim izni verin.</Text>
+                  </Box>
+                  <Box>
+                    <Text fontWeight="bold" color="purple.600">4. Veri Erişimi (Doktor)</Text>
+                    <Text fontSize="sm">Size erişim verilen hastaların verilerini görüntüleyin.</Text>
+                  </Box>
+                </VStack>
+              </CardBody>
+            </Card>
+          </VStack>
         )}
       </div>
     </main>

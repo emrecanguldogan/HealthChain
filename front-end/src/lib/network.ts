@@ -1,4 +1,4 @@
-export type Network = 'mainnet' | 'testnet' | 'devnet';
+export type Network = 'mainnet' | 'testnet';
 
 export function getPersistedNetwork(): Network {
   if (typeof window !== 'undefined') {
@@ -6,8 +6,7 @@ export function getPersistedNetwork(): Network {
       const storedNetwork = localStorage.getItem('network');
       if (
         storedNetwork === 'mainnet' ||
-        storedNetwork === 'testnet' ||
-        storedNetwork === 'devnet'
+        storedNetwork === 'testnet'
       ) {
         return storedNetwork as Network;
       }

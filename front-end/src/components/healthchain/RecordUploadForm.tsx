@@ -1,20 +1,40 @@
 "use client";
 
-import React, { useState, FormEvent } from "react";
-import { useDevnetWallet } from "@/lib/devnet-wallet-context";
-import { openContractCall } from "@/lib/contract-utils";
-import { getHealthchainContract } from "@/constants/contracts";
+import React, { useState, FormEvent, useContext } from "react";
+import { HiroWalletContext } from "@/components/HiroWalletProvider";
 import { useNetwork } from "@/lib/use-network";
-import { devnetWallets } from "@/lib/devnet-wallet-context";
-import { getApi } from '@/lib/stacks-api';
+import {
+  VStack,
+  HStack,
+  Heading,
+  Text,
+  Button,
+  Input,
+  Textarea,
+  FormControl,
+  FormLabel,
+  Card,
+  CardBody,
+  CardHeader,
+  useColorModeValue,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  Select,
+  Box,
+} from "@chakra-ui/react";
 
 export default function RecordUploadForm() {
-  const { currentWallet } = useDevnetWallet();
-  const network = useNetwork();
+  const { testnetAddress, mainnetAddress, isWalletConnected, authenticate } = useContext(HiroWalletContext);
+  const currentNetwork = useNetwork();
   const [recordData, setRecordData] = useState("");
   const [recordType, setRecordType] = useState("lab");
-  const [status, setStatus] = useState<null | string>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const cardBg = useColorModeValue("white", "gray.800");
+  const currentAddress = currentNetwork === 'testnet' ? testnetAddress : mainnetAddress;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -27,66 +47,36 @@ export default function RecordUploadForm() {
       return;
     }
 
-    if (!currentWallet) {
+    if (!isWalletConnected || !currentAddress) {
       setStatus("Lütfen cüzdanınızı bağlayın.");
       setLoading(false);
       return;
     }
 
     try {
-      // Test cüzdanı kontrolü
-      const isTestWallet = devnetWallets.some(w => w.stxAddress === currentWallet.stxAddress);
+      setStatus("Kayıt yükleniyor...");
       
-      if (isTestWallet) {
-        // Test cüzdanları için simülasyon modu
-        setStatus("Test cüzdanı - Simülasyon modu...");
-        
-        // Gerçek API çağrısı yap (bakiye kontrolü)
-        const api = getApi(network);
-        const balanceResult = await api.accountsApi.getAccountBalance({
-          principal: currentWallet.stxAddress
-        });
-
-        console.log('Test wallet balance:', balanceResult);
-        
-        // Simüle edilmiş işlem
-        setTimeout(() => {
-          // Local storage'a test kayıt ekle
-          const recordKey = `record_${currentWallet.stxAddress}_${Date.now()}`;
-          localStorage.setItem(recordKey, JSON.stringify({
-            patient: currentWallet.stxAddress,
-            type: recordType,
-            data: recordData,
-            uploadedAt: new Date().toISOString(),
-            testMode: true,
-            balance: balanceResult.stx?.balance || '0',
-            simulated: true
-          }));
-          
-          setStatus("✅ Test modunda kayıt yüklendi! (Simülasyon)");
-          setRecordData(""); // Formu temizle
-          setLoading(false);
-        }, 2000);
-        
-        return;
-      }
-
-      // Gerçek cüzdan için blockchain işlemi
-      setStatus("Gerçek cüzdan - Hiro Wallet ile onaylayın...");
+      // Store record in localStorage (off-chain storage)
+      const recordKey = `health_record_${currentAddress}_${Date.now()}`;
+      const recordInfo = {
+        patient: currentAddress,
+        type: recordType,
+        data: recordData,
+        uploadedAt: new Date().toISOString(),
+        network: currentNetwork,
+      };
       
-      const contract = getHealthchainContract(network);
-      await openContractCall({
-        contractAddress: contract.contractAddress,
-        contractName: contract.contractName,
-        functionName: "upload-record",
-        functionArgs: [recordType, recordData],
-        network: network,
-        onFinish: () => {
-          setStatus("✅ Kayıt yüklendi! İşlem blockchain'e gönderildi.");
-          setRecordData(""); // Formu temizle
-        },
-        onCancel: () => setStatus("❌ İşlem iptal edildi."),
-      });
+      localStorage.setItem(recordKey, JSON.stringify(recordInfo));
+      
+      // Also store in patient's record list
+      const patientRecordsKey = `patient_records_${currentAddress}`;
+      const existingRecords = localStorage.getItem(patientRecordsKey);
+      const records = existingRecords ? JSON.parse(existingRecords) : [];
+      records.push(recordInfo);
+      localStorage.setItem(patientRecordsKey, JSON.stringify(records));
+      
+      setStatus("✅ Kayıt başarıyla yüklendi!");
+      setRecordData(""); // Clear form
     } catch (err) {
       console.error('Error:', err);
       setStatus("❌ Kayıt yüklenirken hata oluştu: " + (err as Error).message);
@@ -95,59 +85,106 @@ export default function RecordUploadForm() {
     }
   };
 
-  // Test cüzdanı kontrolü
-  const isTestWallet = currentWallet && devnetWallets.some(w => w.stxAddress === currentWallet.stxAddress);
+  if (!isWalletConnected) {
+    return (
+      <Card bg={cardBg} shadow="md">
+        <CardHeader>
+          <Heading size="md" color="blue.600">
+            📋 Sağlık Kaydı Yükle
+          </Heading>
+        </CardHeader>
+        <CardBody>
+          <Alert status="warning">
+            <AlertIcon />
+            <Box>
+              <AlertTitle>Wallet Bağlantısı Gerekli!</AlertTitle>
+              <AlertDescription>
+                Sağlık kaydı yüklemek için Hiro Wallet ile bağlanmanız gerekiyor.
+                <Button 
+                  colorScheme="orange" 
+                  size="sm" 
+                  ml={4}
+                  onClick={authenticate}
+                >
+                  Bağlan
+                </Button>
+              </AlertDescription>
+            </Box>
+          </Alert>
+        </CardBody>
+      </Card>
+    );
+  }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded p-6 shadow mb-6">
-      <h2 className="text-xl font-bold mb-2 text-blue-600">Sağlık Kaydı Yükle</h2>
-      
-      {isTestWallet && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-          <p className="text-sm text-blue-700">
-            <strong>🧪 Test Modu:</strong> Simülasyon ile çalışır. Hiro Wallet gerekmez.
-          </p>
-        </div>
-      )}
-      
-      {!isTestWallet && currentWallet && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
-          <p className="text-sm text-green-700">
-            <strong>🔗 Gerçek Cüzdan:</strong> Hiro Wallet ile blockchain işlemi yapılacak.
-          </p>
-        </div>
-      )}
-      
-      <select
-        className="w-full border rounded p-2 mb-2"
-        value={recordType}
-        onChange={e => setRecordType(e.target.value)}
-        disabled={loading}
-      >
-        <option value="lab">Laboratuvar Sonucu</option>
-        <option value="radiology">Radyoloji</option>
-        <option value="prescription">Reçete</option>
-        <option value="note">Doktor Notu</option>
-      </select>
-      
-      <textarea
-        className="w-full border rounded p-2 mb-2"
-        placeholder="Kayıt verilerini giriniz..."
-        value={recordData}
-        onChange={e => setRecordData(e.target.value)}
-        rows={4}
-        required
-        disabled={loading}
-      />
-      
-      <button
-        type="submit"
-        className={`bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        disabled={loading}
-      >
-        {loading ? 'İşleniyor...' : (isTestWallet ? 'Test Kaydı Yükle' : 'Kayıt Yükle')}
-      </button>
-      {status && <div className="mt-2 text-sm">{status}</div>}
-    </form>
+    <Card bg={cardBg} shadow="md">
+      <CardHeader>
+        <Heading size="md" color="blue.600">
+          📋 Sağlık Kaydı Yükle
+        </Heading>
+      </CardHeader>
+      <CardBody>
+        <form onSubmit={handleSubmit}>
+          <VStack spacing={4}>
+            <Alert status="info">
+              <AlertIcon />
+              <Box>
+                <AlertTitle>Off-Chain Kayıt</AlertTitle>
+                <AlertDescription>
+                  Sağlık kayıtları güvenlik için off-chain olarak saklanır. 
+                  Erişim kontrolü blockchain üzerinden yapılır.
+                </AlertDescription>
+              </Box>
+            </Alert>
+            
+            <FormControl>
+              <FormLabel>Kayıt Türü</FormLabel>
+              <Select
+                value={recordType}
+                onChange={e => setRecordType(e.target.value)}
+                disabled={loading}
+              >
+                <option value="lab">Laboratuvar Sonucu</option>
+                <option value="radiology">Radyoloji</option>
+                <option value="prescription">Reçete</option>
+                <option value="note">Doktor Notu</option>
+                <option value="vaccination">Aşı Kaydı</option>
+                <option value="surgery">Cerrahi Kayıt</option>
+              </Select>
+            </FormControl>
+            
+            <FormControl>
+              <FormLabel>Kayıt Verileri</FormLabel>
+              <Textarea
+                placeholder="Kayıt verilerini giriniz..."
+                value={recordData}
+                onChange={e => setRecordData(e.target.value)}
+                rows={4}
+                required
+                disabled={loading}
+              />
+            </FormControl>
+            
+            <Button
+              type="submit"
+              colorScheme="blue"
+              w="full"
+              isLoading={loading}
+              loadingText="Yükleniyor..."
+              disabled={loading}
+            >
+              Kayıt Yükle
+            </Button>
+            
+            {status && (
+              <Alert status={status.includes('❌') ? 'error' : 'success'}>
+                <AlertIcon />
+                {status}
+              </Alert>
+            )}
+          </VStack>
+        </form>
+      </CardBody>
+    </Card>
   );
 } 

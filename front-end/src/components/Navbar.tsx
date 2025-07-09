@@ -3,30 +3,21 @@
 import { Box, Button, Container, Flex, Link } from '@chakra-ui/react';
 import { useContext, useCallback } from 'react';
 import { HiroWalletContext } from './HiroWalletProvider';
-import { useDevnetWallet } from '@/lib/devnet-wallet-context';
-import { DevnetWalletButton } from './DevnetWalletButton';
 import { ConnectWalletButton } from './ConnectWallet';
 import { NetworkSelector } from './NetworkSelector';
-import { isDevnetEnvironment, useNetwork } from '@/lib/use-network';
 
 export const Navbar = () => {
-  const { isWalletConnected } = useContext(HiroWalletContext);
-  const { currentWallet, wallets, setCurrentWallet } = useDevnetWallet();
-  const network = useNetwork();
+  const { isWalletConnected, authenticate, disconnect } = useContext(HiroWalletContext);
 
   const handleConnect = useCallback(async () => {
     if (!isWalletConnected) {
       try {
-        const { connect } = await import('@stacks/connect');
-        // In the latest API, connect() doesn't take appDetails directly
-        // It's now handled through the request method with forceWalletSelect option
-        await connect();
-        window.location.reload();
+        await authenticate();
       } catch (error) {
-        console.error('Failed to load @stacks/connect:', error);
+        console.error('Failed to connect wallet:', error);
       }
     }
-  }, [isWalletConnected]);
+  }, [isWalletConnected, authenticate]);
 
   return (
     <Box as="nav" bg="white" boxShadow="sm">
@@ -58,24 +49,13 @@ export const Navbar = () => {
           </Flex>
           <Flex align="center" gap={4}>
             <Link href="/profile">
-              <Box>Profil Oluştur</Box>
+              <Box>Hasta Profili</Box>
             </Link>
             <Link href="/my-profile">
-              <Box>Benim Profilim</Box>
-            </Link>
-            <Link href="/encryption">
-              <Box>Şifreleme</Box>
+              <Box>Doktor Profili</Box>
             </Link>
             <NetworkSelector />
-            {isDevnetEnvironment() ? (
-              <DevnetWalletButton
-                currentWallet={currentWallet}
-                wallets={wallets}
-                onWalletSelect={setCurrentWallet}
-              />
-            ) : (
-              <ConnectWalletButton />
-            )}
+            <ConnectWalletButton />
           </Flex>
         </Flex>
       </Container>

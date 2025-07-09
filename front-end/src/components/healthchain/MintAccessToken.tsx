@@ -1,85 +1,65 @@
 "use client";
 
-import React, { useState, FormEvent } from "react";
-import { useDevnetWallet } from "@/lib/devnet-wallet-context";
-import { mintAccessToken, checkHasAccessToken, getAccessTokenId } from "@/lib/healthchain/operations";
-import { useNetwork, isDevnetEnvironment } from "@/lib/use-network";
+import React, { useState, FormEvent, useContext } from "react";
+import { mintAccessToken, hasAccessToken, getAccessToken } from "@/lib/healthchain/operations";
+import { useNetwork } from "@/lib/use-network";
+import { HiroWalletContext } from "@/components/HiroWalletProvider";
 
 export default function MintAccessToken() {
-  const { currentWallet } = useDevnetWallet();
-  const network = useNetwork();
+  const { testnetAddress, mainnetAddress, network, isWalletConnected } = useContext(HiroWalletContext);
+  const currentNetwork = useNetwork();
   const [status, setStatus] = useState<null | string>(null);
   const [loading, setLoading] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
   const [tokenId, setTokenId] = useState<number | null>(null);
 
+  const currentAddress = currentNetwork === 'testnet' ? testnetAddress : mainnetAddress;
+
   // Kullanıcının token'ı olup olmadığını kontrol et
   const checkTokenStatus = async () => {
-    if (!network) return;
-    
-    // Devnet modunda wallet olmadan da çalış
-    const userAddress = currentWallet?.stxAddress || 'devnet-user';
+    if (!network || !currentAddress) return;
     
     try {
-      const hasAccessToken = await checkHasAccessToken(userAddress, network);
-      setHasToken(hasAccessToken);
+      const userHasToken = await hasAccessToken(currentAddress, network);
+      setHasToken(userHasToken);
       
-      if (hasAccessToken) {
-        const id = await getAccessTokenId(userAddress, network);
-        setTokenId(id);
+      if (userHasToken) {
+        const token = await getAccessToken(currentAddress, network);
+        if (token) {
+          setTokenId(token.tokenId);
+        }
       }
     } catch (error) {
       console.error('Error checking token status:', error);
     }
   };
 
-  // Wallet-specific token key oluştur
-  const getWalletSpecificKey = (walletAddress: string) => {
-    return `devnet_access_token_${walletAddress}`;
-  };
-
   // Component mount olduğunda token durumunu kontrol et
   React.useEffect(() => {
     checkTokenStatus();
-  }, [currentWallet, network, isDevnetEnvironment()]);
+  }, [currentAddress, network]);
 
   const handleMintToken = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setStatus(null);
     setLoading(true);
     
-    if (!currentWallet && !isDevnetEnvironment()) {
-      setStatus("Lütfen bir cüzdan seçin.");
+    if (!isWalletConnected || !currentAddress || !network) {
+      setStatus("Lütfen Hiro Wallet'ı bağlayın.");
       setLoading(false);
       return;
     }
 
     try {
-      const userAddress = currentWallet?.stxAddress || 'devnet-user';
+      setStatus("Hiro Wallet ile NFT oluşturun...");
       
-      if (isDevnetEnvironment()) {
-        // Devnet için otomatik işlem
-        setStatus("Devnet: Otomatik NFT oluşturuluyor...");
-        
-        await mintAccessToken(network, userAddress);
-        
-        // İşlem başarılı olduktan sonra token durumunu kontrol et
-        setTimeout(async () => {
-          await checkTokenStatus();
-          setStatus("✅ NFT oluşturuldu! Devnet'te otomatik işlem tamamlandı.");
-        }, 2000);
-      } else {
-        // Testnet/Mainnet için Hiro Wallet bağlantısı
-        setStatus("Hiro Wallet ile NFT oluşturun...");
-        
-        await mintAccessToken(network, userAddress);
-        
-        // İşlem başarılı olduktan sonra token durumunu kontrol et
-        setTimeout(async () => {
-          await checkTokenStatus();
-          setStatus("✅ NFT oluşturuldu! İşlem blockchain'e gönderildi.");
-        }, 2000);
-      }
+      await mintAccessToken(currentAddress, network);
+      
+      // İşlem başarılı olduktan sonra token durumunu kontrol et
+      setTimeout(async () => {
+        await checkTokenStatus();
+        setStatus("✅ NFT oluşturuldu! İşlem blockchain'e gönderildi.");
+      }, 2000);
       
     } catch (err) {
       console.error('Error:', err);
@@ -116,7 +96,7 @@ export default function MintAccessToken() {
 
   return (
     <form onSubmit={handleMintToken} className="bg-white rounded p-6 shadow mb-6">
-      <h2 className="text-xl font-bold mb-2 text-blue-600">🔑 Erişim Token'ı Oluştur (NFT)</h2>
+      <h2 className="text-xl font-bold mb-2 text-blue-600">�� Erişim Token'ı Oluştur (NFT)</h2>
       
       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
         <p className="text-sm text-blue-700 mb-2">
@@ -132,7 +112,7 @@ export default function MintAccessToken() {
       
       <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
         <p className="text-sm text-green-700">
-          <strong>🔗 Blockchain İşlemi:</strong> {isDevnetEnvironment() ? 'Devnet API ile otomatik NFT oluşturulacak.' : 'Hiro Wallet ile gerçek NFT oluşturulacak.'}
+          <strong>🔗 Blockchain İşlemi:</strong> Hiro Wallet ile gerçek NFT oluşturulacak.
         </p>
       </div>
       

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useDevnetWallet } from "@/lib/devnet-wallet-context";
+import React, { useState, useEffect, useContext } from "react";
+import { HiroWalletContext } from "@/components/HiroWalletProvider";
+import { useNetwork } from "@/lib/use-network";
 import {
   Box,
   VStack,
@@ -17,6 +18,8 @@ import {
   useColorModeValue,
   Alert,
   AlertIcon,
+  AlertTitle,
+  AlertDescription,
   Spinner,
   Center,
 } from "@chakra-ui/react";
@@ -35,53 +38,85 @@ interface PatientData {
 }
 
 export default function MyProfile() {
-  const { currentWallet } = useDevnetWallet();
+  const { testnetAddress, mainnetAddress, isWalletConnected, authenticate } = useContext(HiroWalletContext);
+  const currentNetwork = useNetwork();
   const [profileData, setProfileData] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const cardBg = useColorModeValue("white", "gray.800");
   const borderColor = useColorModeValue("gray.200", "gray.700");
+  const currentAddress = currentNetwork === 'testnet' ? testnetAddress : mainnetAddress;
 
   useEffect(() => {
-    if (currentWallet) {
+    if (isWalletConnected && currentAddress) {
       loadProfile();
     } else {
       setLoading(false);
       setError("Cüzdan bağlanmalı");
     }
-  }, [currentWallet]);
+  }, [isWalletConnected, currentAddress, currentNetwork]);
 
   const loadProfile = () => {
-    if (!currentWallet) return;
+    if (!currentAddress) return;
 
     try {
-      // First check if there's a predefined profile in the wallet context
-      if (currentWallet.profileData) {
-        const predefinedProfile: PatientData = {
-          ...currentWallet.profileData,
-          walletAddress: currentWallet.stxAddress,
-          timestamp: new Date().toISOString(), // Add timestamp for display
-        };
-        setProfileData(predefinedProfile);
+      // Check user role from localStorage
+      const savedRole = localStorage.getItem(`user_role_${currentAddress}`);
+      if (savedRole) {
+        setUserRole(savedRole);
+      }
+
+      // Check for patient profile
+      const patientProfile = localStorage.getItem(`patient_profile_${currentAddress}`);
+      if (patientProfile) {
+        const parsedProfile = JSON.parse(patientProfile);
+        setProfileData(parsedProfile);
         setLoading(false);
         return;
       }
 
-      // If no predefined profile, check localStorage
-      const savedProfile = localStorage.getItem(`patient_profile_${currentWallet.stxAddress}`);
-      if (savedProfile) {
-        const parsedProfile = JSON.parse(savedProfile);
+      // Check for doctor profile
+      const doctorProfile = localStorage.getItem(`doctor_profile_${currentAddress}`);
+      if (doctorProfile) {
+        const parsedProfile = JSON.parse(doctorProfile);
         setProfileData(parsedProfile);
-      } else {
-        setError("Henüz profil oluşturulmamış");
+        setLoading(false);
+        return;
       }
+
+      setError("Henüz profil oluşturulmamış");
     } catch (error) {
       setError("Profil yüklenirken hata oluştu");
     } finally {
       setLoading(false);
     }
   };
+
+  if (!isWalletConnected) {
+    return (
+      <VStack spacing={6} align="stretch" maxW="800px" mx="auto" p={6}>
+        <Alert status="warning">
+          <AlertIcon />
+          <Box>
+            <AlertTitle>Wallet Bağlantısı Gerekli!</AlertTitle>
+            <AlertDescription>
+              Profil görüntülemek için Hiro Wallet ile bağlanmanız gerekiyor.
+              <Button 
+                colorScheme="orange" 
+                size="sm" 
+                ml={4}
+                onClick={authenticate}
+              >
+                Bağlan
+              </Button>
+            </AlertDescription>
+          </Box>
+        </Alert>
+      </VStack>
+    );
+  }
 
   if (loading) {
     return (
@@ -128,7 +163,7 @@ export default function MyProfile() {
     );
   }
 
-  const isDoctor = currentWallet?.role === 'doctor';
+  const isDoctor = userRole === 'doctor';
 
   return (
     <VStack spacing={6} align="stretch" maxW="800px" mx="auto" p={6}>
@@ -215,8 +250,8 @@ export default function MyProfile() {
           Profili Düzenle
         </Button>
         <Button 
-          variant="outline" 
-          colorScheme="emerald"
+          colorScheme="blue" 
+          variant="outline"
           onClick={() => window.location.href = '/'}
         >
           Ana Sayfaya Dön

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { useDevnetWallet } from "@/lib/devnet-wallet-context";
+import React, { useState, useContext } from "react";
+import { HiroWalletContext } from "@/components/HiroWalletProvider";
 import { useNetwork } from "@/lib/use-network";
 import {
   Box,
@@ -17,26 +17,66 @@ import {
   CardHeader,
   Divider,
   useColorModeValue,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
 } from "@chakra-ui/react";
 import PatientProfile from "@/components/healthchain/PatientProfile";
 import DoctorProfile from "@/components/healthchain/DoctorProfile";
 
 export default function ProfilePage() {
-  const { currentWallet } = useDevnetWallet();
-  const network = useNetwork();
+  const { testnetAddress, mainnetAddress, isWalletConnected, authenticate } = useContext(HiroWalletContext);
+  const currentNetwork = useNetwork();
   const [userType, setUserType] = useState<"patient" | "doctor" | null>(null);
   
   const bgColor = useColorModeValue("gray.50", "gray.900");
   const cardBg = useColorModeValue("white", "gray.800");
+  const currentAddress = currentNetwork === 'testnet' ? testnetAddress : mainnetAddress;
 
-  if (!currentWallet) {
+  if (!isWalletConnected) {
     return (
       <Container maxW="container.xl" py={8}>
         <Box textAlign="center" py={10}>
           <Heading size="lg" color="emerald.600" mb={4}>
             Profil Sayfası
           </Heading>
-          <Text color="gray.600">Lütfen cüzdanınızı bağlayın.</Text>
+          <Alert status="warning" mb={6}>
+            <AlertIcon />
+            <Box>
+              <AlertTitle>Wallet Bağlantısı Gerekli!</AlertTitle>
+              <AlertDescription>
+                Profil oluşturmak için Hiro Wallet ile bağlanmanız gerekiyor.
+                <Button 
+                  colorScheme="orange" 
+                  size="sm" 
+                  ml={4}
+                  onClick={authenticate}
+                >
+                  Bağlan
+                </Button>
+              </AlertDescription>
+            </Box>
+          </Alert>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (!currentAddress) {
+    return (
+      <Container maxW="container.xl" py={8}>
+        <Box textAlign="center" py={10}>
+          <Heading size="lg" color="emerald.600" mb={4}>
+            Profil Sayfası
+          </Heading>
+          <Alert status="error">
+            <AlertIcon />
+            <AlertTitle>Wallet Adresi Bulunamadı!</AlertTitle>
+            <AlertDescription>
+              Lütfen wallet'ınızı yeniden bağlayın.
+            </AlertDescription>
+          </Alert>
         </Box>
       </Container>
     );
@@ -49,9 +89,12 @@ export default function ProfilePage() {
           <Heading size="lg" color="emerald.600" mb={4}>
             Profil Yönetimi
           </Heading>
-          <Text color="gray.600">
-            Adres: {currentWallet.stxAddress}
+          <Text color="gray.600" fontSize="sm" fontFamily="mono">
+            {currentAddress}
           </Text>
+          <Badge colorScheme={currentNetwork === 'testnet' ? 'orange' : 'green'} mt={2}>
+            {currentNetwork === 'testnet' ? 'Stacks Testnet' : 'Stacks Mainnet'}
+          </Badge>
         </Box>
 
         {!userType ? (
@@ -63,6 +106,9 @@ export default function ProfilePage() {
             </CardHeader>
             <CardBody>
               <VStack spacing={4}>
+                <Text fontSize="sm" color="gray.600" textAlign="center">
+                  HealthChain'de hasta veya doktor olarak profil oluşturabilirsiniz.
+                </Text>
                 <Button
                   size="lg"
                   colorScheme="emerald"

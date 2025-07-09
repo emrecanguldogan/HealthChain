@@ -1,111 +1,164 @@
 "use client";
 
-import React, { useState, FormEvent } from "react";
-import { useDevnetWallet } from "@/lib/devnet-wallet-context";
-import { authorizeDoctor, checkHasAccessToken } from "@/lib/healthchain/operations";
+import React, { useState, FormEvent, useContext } from "react";
+import { HiroWalletContext } from "@/components/HiroWalletProvider";
+import { grantAccess, hasAccessToken } from "@/lib/healthchain/operations";
 import { useNetwork } from "@/lib/use-network";
+import {
+  VStack,
+  HStack,
+  Heading,
+  Text,
+  Button,
+  Input,
+  FormControl,
+  FormLabel,
+  Card,
+  CardBody,
+  CardHeader,
+  useColorModeValue,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  Box,
+} from "@chakra-ui/react";
 
 export default function GrantAccessForm() {
-  const { currentWallet } = useDevnetWallet();
-  const network = useNetwork();
-  const [doctor, setDoctor] = useState("");
-  const [permissions, setPermissions] = useState<string[]>(["read"]);
-  const [status, setStatus] = useState<null | string>(null);
+  const { testnetAddress, mainnetAddress, network } = useContext(HiroWalletContext);
+  const currentNetwork = useNetwork();
+  const [doctorAddress, setDoctorAddress] = useState("");
+  const [tokenId, setTokenId] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const cardBg = useColorModeValue("white", "gray.800");
+  const currentAddress = currentNetwork === 'testnet' ? testnetAddress : mainnetAddress;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setStatus(null);
     setLoading(true);
     
-    if (!doctor.trim()) {
+    if (!doctorAddress.trim()) {
       setStatus("Doktor adresi giriniz.");
       setLoading(false);
       return;
     }
 
-    if (!currentWallet) {
+    if (!tokenId.trim()) {
+      setStatus("Token ID giriniz.");
+      setLoading(false);
+      return;
+    }
+
+    if (!currentAddress) {
       setStatus("Lütfen cüzdanınızı bağlayın.");
       setLoading(false);
       return;
     }
 
     try {
-      // Önce kullanıcının access token'ı olup olmadığını kontrol et
-      const hasToken = await checkHasAccessToken(currentWallet.stxAddress, network);
+      // Check if user has access token
+      const hasToken = await hasAccessToken(currentAddress, currentNetwork);
       if (!hasToken) {
         setStatus("❌ Önce bir erişim token'ı (NFT) oluşturmanız gerekiyor.");
         setLoading(false);
         return;
       }
 
-      // Tüm cüzdanlar için blockchain işlemi
-      setStatus("Hiro Wallet ile doktor yetkilendirin...");
+      setStatus("Doktor erişimi veriliyor...");
       
-      await authorizeDoctor(doctor, permissions, network);
-      setStatus("✅ Doktor yetkilendirildi! İşlem blockchain'e gönderildi.");
+      await grantAccess(doctorAddress, parseInt(tokenId), currentNetwork);
+      setStatus("✅ Doktor erişimi başarıyla verildi!");
+      
+      // Clear form
+      setDoctorAddress("");
+      setTokenId("");
     } catch (err) {
       console.error('Error:', err);
-      setStatus("❌ Doktor yetkilendirilirken hata oluştu: " + (err as Error).message);
+      setStatus("❌ Doktor erişimi verilirken hata oluştu: " + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
+  if (!currentAddress) {
+    return (
+      <Alert status="warning">
+        <AlertIcon />
+        <AlertTitle>Wallet Bağlantısı Gerekli!</AlertTitle>
+        <AlertDescription>
+          Doktor erişimi vermek için cüzdanınızı bağlamanız gerekiyor.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded p-6 shadow mb-6">
-      <h2 className="text-xl font-bold mb-2 text-emerald-600">Doktor Yetkilendir</h2>
-      
-      <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
-        <p className="text-sm text-green-700">
-          <strong>🔗 Blockchain İşlemi:</strong> Hiro Wallet ile gerçek işlem yapılacak.
-        </p>
-      </div>
-      
-      <input
-        className="w-full border rounded p-2 mb-2"
-        type="text"
-        placeholder="Doktorun Stacks adresi"
-        value={doctor}
-        onChange={e => setDoctor(e.target.value)}
-        required
-        disabled={loading}
-      />
-      
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          İzinler:
-        </label>
-        <div className="space-y-2">
-          {["read", "write", "delete"].map((permission) => (
-            <label key={permission} className="flex items-center">
-              <input
-                type="checkbox"
-                checked={permissions.includes(permission)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setPermissions([...permissions, permission]);
-                  } else {
-                    setPermissions(permissions.filter(p => p !== permission));
-                  }
-                }}
-                className="mr-2"
+    <Card bg={cardBg} shadow="md">
+      <CardHeader>
+        <Heading size="md" color="blue.600">
+          👨‍⚕️ Doktor Erişimi Ver
+        </Heading>
+      </CardHeader>
+      <CardBody>
+        <form onSubmit={handleSubmit}>
+          <VStack spacing={4}>
+            <Alert status="info">
+              <AlertIcon />
+              <Box>
+                <AlertTitle>Blockchain İşlemi!</AlertTitle>
+                <AlertDescription>
+                  Bu işlem Hiro Wallet ile gerçek blockchain işlemi yapacaktır.
+                </AlertDescription>
+              </Box>
+            </Alert>
+            
+            <FormControl>
+              <FormLabel>Doktor Adresi</FormLabel>
+              <Input
+                type="text"
+                placeholder="ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8"
+                value={doctorAddress}
+                onChange={e => setDoctorAddress(e.target.value)}
+                required
                 disabled={loading}
               />
-              <span className="text-sm">{permission}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-      
-      <button
-        type="submit"
-        className={`bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        disabled={loading}
-      >
-        {loading ? 'İşleniyor...' : 'Doktor Yetkilendir'}
-      </button>
-      {status && <div className="mt-2 text-sm">{status}</div>}
-    </form>
+            </FormControl>
+            
+            <FormControl>
+              <FormLabel>Token ID</FormLabel>
+              <Input
+                type="number"
+                placeholder="0"
+                value={tokenId}
+                onChange={e => setTokenId(e.target.value)}
+                required
+                disabled={loading}
+              />
+            </FormControl>
+            
+            <Button
+              type="submit"
+              colorScheme="blue"
+              w="full"
+              isLoading={loading}
+              loadingText="İşleniyor..."
+              disabled={loading}
+            >
+              Doktor Erişimi Ver
+            </Button>
+            
+            {status && (
+              <Alert status={status.includes('❌') ? 'error' : 'success'}>
+                <AlertIcon />
+                {status}
+              </Alert>
+            )}
+          </VStack>
+        </form>
+      </CardBody>
+    </Card>
   );
 } 
