@@ -11,7 +11,7 @@ plan:
         - contract-publish:
             contract-name: healthchain_v4
             expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            cost: 71900
+            cost: 72000
             path: contracts/healthchain_v4.clar
             anchor-block-only: true
             clarity-version: 3
