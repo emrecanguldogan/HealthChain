@@ -5,7 +5,7 @@ export const getHealthchainContractAddress = (network: Network) => {
   if (isTestnetEnvironment(network)) {
     return (
       process.env.NEXT_PUBLIC_DEPLOYER_ACCOUNT_ADDRESS ||
-      'ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8'
+      'ST15SXV1HSQ3FRHKCZKEVJCTMYWN0C9GWXFV5XV8G'
     );
   }
   // Mainnet address

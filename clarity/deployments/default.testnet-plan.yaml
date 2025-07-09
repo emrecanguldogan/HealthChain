@@ -10,7 +10,7 @@ plan:
       transactions:
         - contract-publish:
             contract-name: healthchain_v4
-            expected-sender: ST10S95FQD1YVCM0FG8DQJHBN4YR5CZ0S5DFFKYW5
+            expected-sender: ST15SXV1HSQ3FRHKCZKEVJCTMYWN0C9GWXFV5XV8G
             cost: 7220
             path: contracts/healthchain_v4.clar
             anchor-block-only: true
