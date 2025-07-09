@@ -521,14 +521,12 @@ export const assignRole = async (network: Network, role: string, userAddress: st
 export const getUserRole = async (network: Network, userAddress: string) => {
   try {
     console.log('🔍 Getting user role from blockchain...');
-    
     const result = await callReadOnlyFunction(
       network,
-      'dev-view-role',
-      [userAddress], // user address
+      'dev-view-role', // testnet fonksiyonunu kullan
+      [userAddress],
       userAddress
     );
-    
     console.log('📊 User role result:', result);
     return result;
   } catch (error) {
