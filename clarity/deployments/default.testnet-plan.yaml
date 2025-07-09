@@ -2,7 +2,7 @@
 id: 0
 name: Testnet deployment
 network: testnet
-stacks-node: "https://api.testnet.hiro.so"
+stacks-node: "https://stacks-node-api.testnet.stacks.co"
 bitcoin-node: "http://blockstack:blockstacksystem@bitcoind.testnet.stacks.co:18332"
 plan:
   batches:
@@ -10,8 +10,8 @@ plan:
       transactions:
         - contract-publish:
             contract-name: healthchain_v4
-            expected-sender: ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8
-            cost: 71900
+            expected-sender: ST29NET43ZJ69E0NSBPDD0AY85HGJH98GWWJXC9H3
+            cost: 7220
             path: contracts/healthchain_v4.clar
             anchor-block-only: true
             clarity-version: 3
