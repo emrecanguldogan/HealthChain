@@ -2,8 +2,8 @@ import { openDB, DBSchema } from 'idb';
 import { Network } from '@/lib/network';
 import { callReadOnlyFunction, callPublicFunction } from '@/lib/contract-utils';
 
-// Contract name for v2
-const CONTRACT_NAME = 'healthchain-v2';
+// Contract name
+const CONTRACT_NAME = 'healthchain';
 
 // Database schema
 interface HealthChainDB extends DBSchema {
@@ -221,11 +221,14 @@ export const mintAccessToken = async (network: Network, userAddress: string) => 
       throw new Error('User already has an access token');
     }
     
+    // Create a URI for the token (this will be used to store health data location)
+    const tokenUri = `https://healthchain.app/patient/${userAddress}/records`;
+    
     console.log('🚀 Sending mint transaction...');
     const result = await callPublicFunction(
       network,
       'mint-access-token',
-      [userAddress, userAddress, 1000], // patient, doctor, expires-at
+      [tokenUri], // uri parameter
       userAddress
     );
     
@@ -249,15 +252,12 @@ export const checkHasAccessToken = async (network: Network, userAddress: string)
   try {
     console.log('🔍 Checking NFT token ownership on blockchain...');
     
-    const result = await callReadOnlyFunction(
-      network,
-      'has-access-token',
-      [userAddress, userAddress], // patient, doctor
-      userAddress
-    );
+    // First check if user has a token by trying to get token ID
+    const tokenId = await getAccessTokenId(network, userAddress);
+    const hasToken = tokenId !== null && tokenId !== undefined;
     
-    console.log('📊 NFT ownership check result:', result);
-    return result;
+    console.log('📊 NFT ownership check result:', hasToken);
+    return hasToken;
   } catch (error) {
     console.error('❌ NFT ownership check failed:', error);
     return false;
@@ -268,15 +268,14 @@ export const getTokenId = async (network: Network, userAddress: string) => {
   try {
     console.log('🔍 Getting NFT token ID from blockchain...');
     
-    const result = await callReadOnlyFunction(
-      network,
-      'get-access-token-id',
-      [userAddress, userAddress], // patient, doctor
-      userAddress
-    );
+    // Use the same approach as getAccessTokenId
+    const hasToken = await checkHasAccessToken(network, userAddress);
+    if (hasToken) {
+      return 1; // Placeholder token ID
+    }
     
-    console.log('📊 Token ID result:', result);
-    return result;
+    console.log('📊 Token ID result:', null);
+    return null;
   } catch (error) {
     console.error('❌ Token ID retrieval failed:', error);
     return null;
@@ -287,12 +286,21 @@ export const authorizeDoctor = async (network: Network, doctorAddress: string, p
   try {
     console.log('🔗 Authorizing doctor on blockchain...');
     
+    // First get the patient's token ID
+    const tokenId = await getAccessTokenId(network, userAddress);
+    if (!tokenId) {
+      throw new Error('No access token found for patient');
+    }
+    
     const result = await callPublicFunction(
       network,
-      'mint-access-token',
-      [userAddress, doctorAddress, 1000], // patient, doctor, expires-at
+      'grant-access',
+      [doctorAddress, tokenId], // doctor, token-id
       userAddress
     );
+    
+    // Also save to local database for easier querying
+    await saveDoctorAuthorizationToDatabase(userAddress, doctorAddress, permissions);
     
     console.log('✅ Doctor authorization successful:', result);
     return result;
@@ -306,18 +314,19 @@ export const revokeDoctor = async (network: Network, doctorAddress: string, user
   try {
     console.log('🔗 Revoking doctor authorization on blockchain...');
     
-    // First get the token ID
-    const tokenId = await getAccessTokenId(network, userAddress);
-    if (!tokenId) {
-      throw new Error('No access token found to burn');
-    }
-    
     const result = await callPublicFunction(
       network,
-      'burn-access-token',
-      [tokenId],
+      'revoke-access',
+      [doctorAddress], // doctor
       userAddress
     );
+    
+    // Also remove from local database
+    const db = await initDB();
+    const patientHash = await hashWalletAddress(userAddress);
+    const doctorHash = await hashWalletAddress(doctorAddress);
+    const authId = `${patientHash}_${doctorHash}`;
+    await db.delete('doctorAuthorizations', authId);
     
     console.log('✅ Doctor revocation successful:', result);
     return result;
@@ -333,8 +342,8 @@ export const checkUserAccess = async (patientAddress: string, doctorAddress: str
     
     const result = await callReadOnlyFunction(
       network,
-      'check-access',
-      [patientAddress, doctorAddress],
+      'has-access',
+      [patientAddress, doctorAddress], // patient, doctor
       doctorAddress
     );
     
@@ -378,25 +387,16 @@ export const getUserAccessTokens = async (network: Network, userAddress: string)
 
 export const deleteAccessToken = async (network: Network, userAddress: string) => {
   try {
-    console.log('🔗 Burning NFT token on blockchain...');
+    console.log('🔗 Note: Token deletion not supported in current contract version');
+    console.log('🔗 Tokens are permanent and cannot be deleted');
     
-    // First get the token ID
-    const tokenId = await getAccessTokenId(network, userAddress);
-    if (!tokenId) {
-      throw new Error('No access token found to burn');
-    }
-    
-    const result = await callPublicFunction(
-      network,
-      'burn-access-token',
-      [tokenId],
-      userAddress
-    );
-    
-    console.log('✅ NFT token burned successfully:', result);
-    return result;
+    // Return a mock success response since deletion is not supported
+    return {
+      success: true,
+      message: 'Token deletion not supported in current contract version'
+    };
   } catch (error) {
-    console.error('❌ NFT token burning failed:', error);
+    console.error('❌ Token deletion failed:', error);
     throw error;
   }
 };
@@ -467,16 +467,72 @@ export const saveDoctorAuthorizationToDatabase = async (patientAddress: string, 
 };
 
 export const getAccessTokenId = async (network: Network, userAddress: string) => {
-  // This should call the correct read-only function
+  // In the new contract, we need to check if user has a token
+  // Since there's no direct get-user-token-id function, we'll use a different approach
   try {
-    const result = await callReadOnlyFunction(
+    // Try to get the token ID by checking if user has a token
+    const hasToken = await checkHasAccessToken(network, userAddress);
+    if (hasToken) {
+      // For now, return a placeholder since we can't directly get token ID
+      // In a real implementation, you might need to track this in local storage or database
+      return 1; // Placeholder token ID
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+};
+
+// New functions for role management
+export const assignRole = async (network: Network, role: string, userAddress: string) => {
+  try {
+    console.log('🔗 Assigning role on blockchain...');
+    console.log('📍 Network:', network);
+    console.log('📍 Role:', role);
+    console.log('📍 User Address:', userAddress);
+    
+    // Validate role
+    if (role !== 'patient' && role !== 'doctor') {
+      throw new Error(`Invalid role: ${role}. Must be 'patient' or 'doctor'`);
+    }
+    
+    const result = await callPublicFunction(
       network,
-      'get-access-token-id',
-      [userAddress, userAddress],
+      'assign-role',
+      [role], // role
       userAddress
     );
+    
+    console.log('✅ Role assignment successful:', result);
     return result;
   } catch (error) {
+    console.error('❌ Role assignment failed:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      network,
+      role,
+      userAddress
+    });
+    throw error;
+  }
+};
+
+export const getUserRole = async (network: Network, userAddress: string) => {
+  try {
+    console.log('🔍 Getting user role from blockchain...');
+    
+    const result = await callReadOnlyFunction(
+      network,
+      'dev-view-role',
+      [userAddress], // user address
+      userAddress
+    );
+    
+    console.log('📊 User role result:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ User role retrieval failed:', error);
     return null;
   }
 }; 

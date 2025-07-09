@@ -19,7 +19,7 @@ const HiroWalletContext = createContext<HiroWallet>({
   isWalletConnected: false,
   testnetAddress: null,
   mainnetAddress: null,
-  network: 'mainnet',
+  network: 'testnet',
   setNetwork: () => {},
   authenticate: () => {},
   disconnect: () => {},

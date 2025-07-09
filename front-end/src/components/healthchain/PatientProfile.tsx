@@ -4,8 +4,10 @@ import React, { useState, useEffect, FormEvent } from "react";
 import { 
   createPatientProfile, 
   getPatientProfileByWallet, 
-  checkUserHasPatientProfile 
+  checkUserHasPatientProfile,
+  assignRole
 } from "@/lib/healthchain/operations";
+import { useNetwork } from "@/lib/use-network";
 import { useCurrentAddress } from "@/hooks/useCurrentAddress";
 import RecordUploadForm from "./RecordUploadForm";
 import GrantAccessForm from "./GrantAccessForm";
@@ -59,6 +61,7 @@ const Textarea = ({ value, onChange, placeholder, className = "" }: any) => (
 
 export default function PatientProfile() {
   const stxAddress = useCurrentAddress();
+  const network = useNetwork();
   const [patientData, setPatientData] = useState<PatientData>({
     name: "",
     age: "",
@@ -120,15 +123,40 @@ export default function PatientProfile() {
       setIsLoading(true);
       setStatus("Veritabanına kaydediliyor...");
       
-      // Veritabanına kaydet
-      await createPatientProfile({
+      // Önce blockchain'e rol ata
+      setStatus("Blockchain'e rol atanıyor...");
+      try {
+        console.log('🔗 Rol atama başlıyor...');
+        console.log('📍 Network:', network);
+        console.log('📍 Address:', stxAddress);
+        console.log('📍 Role: patient');
+        
+        const roleResult = await assignRole(network, "patient", stxAddress);
+        console.log('✅ Rol atama sonucu:', roleResult);
+      } catch (error) {
+        console.error('❌ Rol atama hatası:', error);
+        
+        // Contract deploy edilmemişse kullanıcıya bilgi ver
+        if (error instanceof Error && error.message.includes('broadcasting transaction')) {
+          setStatus("⚠️ Contract henüz testnet'te deploy edilmemiş. Sadece veritabanına kaydediliyor...");
+          console.log('ℹ️ Contract olmadığı için blockchain işlemi atlanıyor, sadece veritabanına kayıt yapılacak');
+          // Contract olmadan devam et - return etmiyoruz
+        } else {
+          setStatus(`Rol atama hatası: ${error}`);
+          return;
+        }
+      }
+      
+      // Sonra veritabanına kaydet
+      setStatus("Veritabanına kaydediliyor...");
+      await createPatientProfile(stxAddress, {
         name: patientData.name,
         age: parseInt(patientData.age) || 0,
         bloodType: patientData.bloodType,
         allergies: patientData.allergies,
         emergencyContact: patientData.emergencyContact,
         medicalHistory: patientData.medicalHistory,
-      }, stxAddress);
+      });
 
       setStatus("Profil veritabanına başarıyla kaydedildi!");
       setIsEditing(false);

@@ -4,8 +4,10 @@ import React, { useState, useEffect, FormEvent } from "react";
 import { 
   createDoctorProfile, 
   getDoctorProfileByWallet, 
-  checkUserHasDoctorProfile 
+  checkUserHasDoctorProfile,
+  assignRole
 } from "@/lib/healthchain/operations";
+import { useNetwork } from "@/lib/use-network";
 import { useCurrentAddress } from "@/hooks/useCurrentAddress";
 import ViewRecord from "./ViewRecord";
 
@@ -76,6 +78,7 @@ const Badge = ({ children, colorScheme = "blue" }: any) => (
 
 export default function DoctorProfile() {
   const stxAddress = useCurrentAddress();
+  const network = useNetwork();
   const [doctorData, setDoctorData] = useState<DoctorData>({
     name: "",
     specialization: "",
@@ -105,7 +108,7 @@ export default function DoctorProfile() {
             name: profile.name || "",
             specialization: profile.specialization || "",
             licenseNumber: profile.licenseNumber || "",
-            hospital: profile.hospital || "",
+            hospital: "", // Hospital field not in database schema
             experience: profile.experience?.toString() || "",
           });
         }
@@ -136,14 +139,18 @@ export default function DoctorProfile() {
       setIsLoading(true);
       setStatus("Veritabanına kaydediliyor...");
       
-      // Veritabanına kaydet
-      await createDoctorProfile({
+      // Önce blockchain'e rol ata
+      setStatus("Blockchain'e rol atanıyor...");
+      await assignRole(network, "doctor", stxAddress);
+      
+      // Sonra veritabanına kaydet
+      setStatus("Veritabanına kaydediliyor...");
+      await createDoctorProfile(stxAddress, {
         name: doctorData.name,
         specialization: doctorData.specialization,
         licenseNumber: doctorData.licenseNumber,
-        hospital: doctorData.hospital,
         experience: parseInt(doctorData.experience) || 0,
-      }, stxAddress);
+      });
 
       setStatus("Profil veritabanına başarıyla kaydedildi!");
       setIsEditing(false);

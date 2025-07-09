@@ -10,8 +10,8 @@ export function formatValue(hex: string) {
 export const getHealthchainContract = (network: Network) => {
   // Contract details - update these with your actual deployed contract
   return {
-    contractAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-    contractName: 'healthchain-v2',
+    contractAddress: 'ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8',
+    contractName: 'healthchainv3',
     network: network
   };
 };

@@ -4,13 +4,13 @@ const path = require('path');
 // Contract content
 const contractContent = fs.readFileSync(path.join(__dirname, 'clarity/contracts/healthchain.clar'), 'utf8');
 
-// Deploy contract to devnet
+// Deploy contract to testnet
 async function deployContract() {
   const apiKey = '9d2edca11fe49a2d6dc07f5a2bc5e998';
   const contractAddress = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
-  const contractName = 'healthchain';
+  const contractName = 'healthchain_v4';
   
-  const deployUrl = `https://api.platform.hiro.so/v1/ext/${apiKey}/stacks-blockchain-api/v2/contracts/deploy`;
+  const deployUrl = `https://api.platform.hiro.so/v1/ext/${apiKey}/stacks-blockchain-api/v2/contracts/deploy?network=testnet`;
   
   const deployData = {
     contract_id: `${contractAddress}.${contractName}`,

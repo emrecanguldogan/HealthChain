@@ -10,6 +10,7 @@ import {
   PostConditionMode,
   principalCV,
   stringAsciiCV,
+  stringUtf8CV,
   listCV,
   uintCV,
   boolCV,
@@ -57,7 +58,11 @@ export const openContractCall = async (options: ContractCallRegularOptions) => {
       sponsored: options.sponsored,
     };
 
+    console.log('🔗 openContractCall params:', params);
+
     const result: TransactionResult = await request({}, 'stx_callContract', params);
+
+    console.log('📤 openContractCall result:', result);
 
     if (options.onFinish) {
       options.onFinish(result as FinishedTxData);
@@ -65,7 +70,12 @@ export const openContractCall = async (options: ContractCallRegularOptions) => {
 
     return result;
   } catch (error: unknown) {
-    console.error('Failed to execute contract call:', error);
+    console.error('❌ openContractCall failed:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      options
+    });
     if (error instanceof Error && error.message?.includes('cancelled') && options.onCancel) {
       options.onCancel();
     }
@@ -87,7 +97,13 @@ export const callReadOnlyFunction = async (
     // Convert function args to ClarityValues
     const clarityArgs: ClarityValue[] = functionArgs.map(arg => {
       if (typeof arg === 'string') {
-        return principalCV(arg);
+        // Check if it's a principal address (starts with ST or SP)
+        if (arg.startsWith('ST') || arg.startsWith('SP')) {
+          return principalCV(arg);
+        } else {
+          // For UTF-8 strings (like URIs), use stringUtf8CV
+          return stringUtf8CV(arg);
+        }
       } else if (typeof arg === 'number') {
         return uintCV(arg);
       } else if (typeof arg === 'boolean') {
@@ -124,17 +140,38 @@ export const callPublicFunction = async (
   try {
     const contract = getHealthchainContract(network);
     
+    console.log('🔍 Contract bilgileri:', {
+      contractAddress: contract.contractAddress,
+      contractName: contract.contractName,
+      network: network,
+      isTestnet: isTestnetEnvironment(network)
+    });
+    
     // Convert function args to ClarityValues
-    const clarityArgs: ClarityValue[] = functionArgs.map(arg => {
+    const clarityArgs: ClarityValue[] = functionArgs.map((arg, index) => {
+      console.log(`🔧 Converting arg ${index}:`, arg, typeof arg);
+      
       if (typeof arg === 'string') {
-        return principalCV(arg);
+        // Check if it's a principal address (starts with ST or SP)
+        if (arg.startsWith('ST') || arg.startsWith('SP')) {
+          console.log(`📍 Converting to principal: ${arg}`);
+          return principalCV(arg);
+        } else {
+          // For ASCII strings (like roles), use stringAsciiCV
+          console.log(`📍 Converting to ASCII string: ${arg}`);
+          return stringAsciiCV(arg);
+        }
       } else if (typeof arg === 'number') {
+        console.log(`📍 Converting to uint: ${arg}`);
         return uintCV(arg);
       } else if (typeof arg === 'boolean') {
+        console.log(`📍 Converting to bool: ${arg}`);
         return boolCV(arg);
       } else if (Array.isArray(arg)) {
+        console.log(`📍 Converting to list: ${arg}`);
         return listCV(arg.map(item => stringAsciiCV(item)));
       } else {
+        console.log(`📍 Converting to ASCII string (default): ${arg}`);
         return stringAsciiCV(String(arg));
       }
     });
@@ -168,6 +205,14 @@ export const callPublicFunction = async (
     return result;
   } catch (error) {
     console.error('❌ Public function call failed:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      functionName,
+      functionArgs,
+      network,
+      senderAddress
+    });
     throw error;
   }
 };

@@ -1,0 +1,18 @@
+---
+id: 0
+name: Testnet deployment
+network: testnet
+stacks-node: "https://api.testnet.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoind.testnet.stacks.co:18332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: healthchain
+            expected-sender: ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8
+            cost: 71900
+            path: contracts/healthchain.clar
+            anchor-block-only: true
+            clarity-version: 3
+      epoch: "3.1"
