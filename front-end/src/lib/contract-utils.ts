@@ -156,6 +156,10 @@ export const callPublicFunction = async (
         if (arg.startsWith('ST') || arg.startsWith('SP')) {
           console.log(`📍 Converting to principal: ${arg}`);
           return principalCV(arg);
+        } else if (arg.startsWith('http')) {
+          // For URIs, use stringUtf8CV
+          console.log(`📍 Converting to UTF8 string: ${arg}`);
+          return stringUtf8CV(arg);
         } else {
           // For ASCII strings (like roles), use stringAsciiCV
           console.log(`📍 Converting to ASCII string: ${arg}`);

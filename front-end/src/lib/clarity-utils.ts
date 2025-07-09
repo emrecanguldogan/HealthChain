@@ -11,7 +11,7 @@ export const getHealthchainContract = (network: Network) => {
   // Contract details - update these with your actual deployed contract
   return {
     contractAddress: 'ST1M2X1WBC60W09W91W4ESDRHM94H75VGXGDNCQE8',
-    contractName: 'healthchainv3',
+    contractName: 'healthchain_v4',
     network: network
   };
 };
